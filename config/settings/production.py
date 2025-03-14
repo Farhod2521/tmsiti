@@ -22,6 +22,13 @@ DATABASES = {
         }
     }
 }
+
+CSRF_TRUSTED_ORIGINS = [
+    "https://main.tmsiti.uz",
+    "https://www.main.tmsiti.uz",
+    "http://127.0.0.1:8000",
+    "http://localhost:8000"
+]
 SECURE_BROWSER_XSS_FILTER = True
 SECURE_CONTENT_TYPE_NOSNIFF = True
 SESSION_COOKIE_SECURE = True
