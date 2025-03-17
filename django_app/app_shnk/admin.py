@@ -14,6 +14,6 @@ class ShnkGroupAdmin(admin.ModelAdmin):
 
 @admin.register(Shnk)
 class ShnkAdmin(TranslationAdmin):
-    list_display = ("name", "designation", "shnkgroup")
+    list_display = ("id","name", "designation", "shnkgroup")
     search_fields = ("name", "designation")
     list_filter = ("shnkgroup",)
