@@ -1,4 +1,4 @@
-from fastapi_app.schemas.qurilish_reglament_schema import QurilishReglamentSchema
+from schemas.qurilish_reglament_schema import QurilishReglamentSchema
 from typing import Dict, List
 from fastapi import APIRouter, Depends
 from database import get_db
