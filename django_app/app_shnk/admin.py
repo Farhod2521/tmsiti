@@ -1,6 +1,7 @@
 from django.contrib import admin
 from .models import Subsystem, ShnkGroup, Shnk, Qurilish_reglaament
 from modeltranslation.admin import TranslationAdmin
+from import_export.admin import  ImportExportModelAdmin
 @admin.register(Subsystem)
 class SubsystemAdmin(admin.ModelAdmin):
     list_display = ("title",)
@@ -21,7 +22,7 @@ class ShnkAdmin(TranslationAdmin):
 
 
 @admin.register(Qurilish_reglaament)
-class Qurilish_reglaamentAdmin(TranslationAdmin):
+class Qurilish_reglaamentAdmin(ImportExportModelAdmin,TranslationAdmin):
     list_display = ("group","name", "designation",)
     search_fields = ("name", "designation")
 
