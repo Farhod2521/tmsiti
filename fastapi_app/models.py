@@ -47,3 +47,14 @@ class QurilishReglament(Base):
     designation = Column(String(100), nullable=False, index=True)
     pdf_uz = Column(String(500), nullable=True)
     pdf_ru = Column(String(500), nullable=True)
+
+
+
+class Malumotnoma(Base):
+    __tablename__ = "malumotnoma"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(500), nullable=False)
+    designation = Column(String(100), nullable=False)
+    pdf_uz = Column(String, nullable=True)  # Fayl URL sifatida saqlanadi
+    pdf_ru = Column(String, nullable=True)
