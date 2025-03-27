@@ -51,7 +51,7 @@ class QurilishReglament(Base):
 
 
 class Malumotnoma(Base):
-    __tablename__ = "malumotnoma"
+    __tablename__ = "Malumotnoma"
 
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(500), nullable=False)
