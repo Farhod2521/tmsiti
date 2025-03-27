@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Subsystem, ShnkGroup, Shnk
+from .models import Subsystem, ShnkGroup, Shnk, Qurilish_reglaament
 from modeltranslation.admin import TranslationAdmin
 @admin.register(Subsystem)
 class SubsystemAdmin(admin.ModelAdmin):
@@ -17,3 +17,11 @@ class ShnkAdmin(TranslationAdmin):
     list_display = ("id","name", "designation", "shnkgroup")
     search_fields = ("name", "designation")
     list_filter = ("shnkgroup",)
+
+
+
+@admin.register(Qurilish_reglaament)
+class Qurilish_reglaamentAdmin(TranslationAdmin):
+    list_display = ("group","name", "designation",)
+    search_fields = ("name", "designation")
+

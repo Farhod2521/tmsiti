@@ -35,3 +35,15 @@ class Shnk(Base):
 
     # ShnkGroup bilan bog‘lanish
     shnkgroup = relationship("ShnkGroup", back_populates="shnks")
+
+
+
+class QurilishReglament(Base):
+    __tablename__ = "qurilish_reglaament"
+
+    id = Column(Integer, primary_key=True, index=True)
+    group = Column(String(500), nullable=False)
+    name = Column(String(500), nullable=False, index=True)
+    designation = Column(String(100), nullable=False, index=True)
+    pdf_uz = Column(String(500), nullable=True)
+    pdf_ru = Column(String(500), nullable=True)

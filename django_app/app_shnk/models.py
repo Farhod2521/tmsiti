@@ -49,3 +49,17 @@ class Shnk(models.Model):
 
     def __str__(self):
         return self.name
+    
+
+
+class Qurilish_reglaament(models.Model):
+    group    =  models.CharField(max_length=500, verbose_name="Guruhi")
+    name = models.CharField(max_length=500, verbose_name="Nomi", db_index=True)
+    designation = models.CharField(max_length=100, verbose_name="Belgilanishi", db_index=True)
+    pdf_uz = models.FileField(upload_to="FILES/shnk", blank=True, null=True)
+    pdf_ru = models.FileField(upload_to="FILES/shnk", blank=True, null=True)
+
+    class Meta:
+        db_table = "qurilish_reglaament"
+        verbose_name = "Qurilish_reglaament"
+        verbose_name_plural = "Qurilish_reglaament"

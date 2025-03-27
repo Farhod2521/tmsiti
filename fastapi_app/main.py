@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from routers import subsystem, shnk, shnkgroup
+from routers import subsystem, shnk, shnkgroup, qurilish_reglament
 
 app = FastAPI(title="FastAPI SHNK API", version="1.0")
 
@@ -15,6 +15,7 @@ app.add_middleware(
 
 app.include_router(subsystem.router)
 app.include_router(shnk.router)
+app.include_router(qurilish_reglament.router)
 # app.include_router(shnkgroup.router)
 
 @app.get("/")
