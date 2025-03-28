@@ -4,12 +4,12 @@ from modeltranslation.admin import TranslationAdmin
 from import_export.admin import  ImportExportModelAdmin
 @admin.register(Subsystem)
 class SubsystemAdmin(TranslationAdmin):
-    list_display = ("title_ru","title_uz",)
+    list_display = ("title",)
     search_fields = ("title",)
 
 @admin.register(ShnkGroup)
 class ShnkGroupAdmin(TranslationAdmin):
-    list_display = ("title_ru","title_uz", "subsystem")
+    list_display = ("title", "subsystem")
     search_fields = ("title",)
     list_filter = ("subsystem",)
 
