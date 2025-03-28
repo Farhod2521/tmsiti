@@ -3,13 +3,13 @@ from .models import Subsystem, ShnkGroup, Shnk, Qurilish_reglaament, Malumotnoma
 from modeltranslation.admin import TranslationAdmin
 from import_export.admin import  ImportExportModelAdmin
 @admin.register(Subsystem)
-class SubsystemAdmin(admin.ModelAdmin):
-    list_display = ("title",)
+class SubsystemAdmin(TranslationAdmin):
+    list_display = ("title_ru","title_uz",)
     search_fields = ("title",)
 
 @admin.register(ShnkGroup)
-class ShnkGroupAdmin(admin.ModelAdmin):
-    list_display = ("title", "subsystem")
+class ShnkGroupAdmin(TranslationAdmin):
+    list_display = ("title_ru","title_uz", "subsystem")
     search_fields = ("title",)
     list_filter = ("subsystem",)
 
