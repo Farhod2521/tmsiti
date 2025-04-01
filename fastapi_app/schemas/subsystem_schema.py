@@ -2,8 +2,8 @@ from pydantic import BaseModel
 from typing import List, Optional
 
 class ShnkSchema(BaseModel):
-    name_uz: str
-    name_ru: str
+    name_uz: Optional[str]
+    name_ru: Optional[str]
     designation: str
     pdf_uz: str
     pdf_ru: Optional[str] = None
