@@ -75,3 +75,13 @@ class Malumotnoma(models.Model):
         db_table = "Malumotnoma"
         verbose_name = "Malumotnoma"
         verbose_name_plural = "Malumotnoma"
+
+class Metodik_Qolanma(models.Model):
+    name = models.CharField(max_length=500, verbose_name="Nomi", db_index=True)
+    pdf_uz = models.FileField(upload_to="FILES/Metodik_Qolanma", blank=True, null=True)
+    pdf_ru = models.FileField(upload_to="FILES/Metodik_Qolanma", blank=True, null=True)
+
+    class Meta:
+        db_table = "metodik_qolanma"
+        verbose_name = "Metodik_Qolanma"
+        verbose_name_plural = "Metodik_Qolanma"
