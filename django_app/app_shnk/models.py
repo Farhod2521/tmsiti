@@ -85,3 +85,26 @@ class Metodik_Qolanma(models.Model):
         db_table = "metodik_qolanma"
         verbose_name = "Metodik_Qolanma"
         verbose_name_plural = "Metodik_Qolanma"
+
+
+
+
+class SREN(models.Model):
+    name = models.CharField(max_length=500, verbose_name="Nomi", db_index=True)
+    designation = models.CharField(max_length=100, verbose_name="Belgilanishi", db_index=True)
+    pdf_uz = models.FileField(upload_to="FILES/shnk", blank=True, null=True)
+    pdf_ru = models.FileField(upload_to="FILES/shnk", blank=True, null=True)
+
+    class Meta:
+        db_table = "sren"
+        verbose_name = "SREN"
+        verbose_name_plural = "SREN"
+
+class  SREN_SHNQ(models.Model):
+    sren = models.ForeignKey(SREN, on_delete=models.CASCADE)
+    name = models.CharField(max_length=500, verbose_name="Nomi", db_index=True)
+    designation = models.CharField(max_length=100, verbose_name="Belgilanishi", db_index=True)
+    class Meta:
+        db_table = "sren_shnk"
+        verbose_name = "SREN_SHNKQ"
+        verbose_name_plural = "SREN_SHNKQ"
