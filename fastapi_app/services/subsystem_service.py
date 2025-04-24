@@ -29,7 +29,7 @@ async def get_subsystems(db: AsyncSession):
                 ) for group in subsystem.groups
             ]
         ) for subsystem in subsystems
-    ]a
+    ]
 
 async def filter_subsystems_by_title(db: AsyncSession, title: str):
     result = await db.execute(
