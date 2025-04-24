@@ -1,13 +1,9 @@
-from fastapi import APIRouter
-from services.sren_service import get_all_sren
-from schemas.sren_schema import SRENSchema
-from typing import List
+from fastapi import APIRouter, Depends
+from sqlalchemy.ext.asyncio import AsyncSession
+from database import get_db  # Dependency to get DB session
+from  services.sren_service import get_all_sren
+router = APIRouter()
 
-router = APIRouter(
-    prefix="/sren",
-    tags=["SREN"]
-)
-
-@router.get("/", response_model=List[SRENSchema])
-def list_sren():
-    return get_all_sren()
+@router.get("/sren")
+async def list_sren(db: AsyncSession = Depends(get_db)):
+    return await get_all_sren(db)
