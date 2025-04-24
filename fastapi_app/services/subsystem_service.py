@@ -1,41 +1,38 @@
+from typing import List
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
-from sqlalchemy.orm import selectinload
-from models import Subsystem, ShnkGroup, Shnk
-from schemas.subsystem_schema import SubsystemResponse, ShnkGroupSchema, ShnkSchema
+from models import SREN, SREN_SHNK  # SQLAlchemy models
+from schemas.sren_schema import SRENSchema, SREN_SHNKSchema
 
-async def get_subsystems(db: AsyncSession):
-    result = await db.execute(
-        select(Subsystem).options(selectinload(Subsystem.groups).selectinload(ShnkGroup.shnks))
-    )
-    subsystems = result.scalars().all()
+# Async function to get all SREN records
+async def get_all_sren(db: AsyncSession) -> List[SRENSchema]:
+    sren_list = []
+    # Querying all SREN records asynchronously
+    result = await db.execute(select(SREN))
+    sren_records = result.scalars().all()
 
-    return [
-        SubsystemResponse(
-            title=subsystem.title,
-            groups=[
-                ShnkGroupSchema(
-                    title=group.title,
-                    documents=[
-                        ShnkSchema(
-                            name_uz=shnk.name_uz,
-                            name_ru=shnk.name_ru,
-                            designation=shnk.designation,
-                            pdf_uz=shnk.pdf_uz,
-                            pdf_ru=shnk.pdf_ru,
-                            url=shnk.url
-                        ) for shnk in group.shnks
-                    ]
-                ) for group in subsystem.groups
-            ]
-        ) for subsystem in subsystems
-    ]
-
-async def filter_subsystems_by_title(db: AsyncSession, title: str):
-    result = await db.execute(
-        select(Subsystem).where(Subsystem.title.ilike(f"%{title}%")).options(
-            selectinload(Subsystem.groups).selectinload(ShnkGroup.shnks)
+    for sren in sren_records:
+        # Querying related SREN_SHNK records asynchronously
+        shnk_result = await db.execute(
+            select(SREN_SHNK).filter(SREN_SHNK.sren_id == sren.id)
         )
-    )
-    subsystems = result.scalars().all()
-    return await get_subsystems(db)
+        shnk_records = shnk_result.scalars().all()
+
+        shnk_list = [
+            SREN_SHNKSchema(
+                sren_shnk_uz=shnk.name,
+                sren_shnk_ru=shnk.name,
+                sren_designation=shnk.designation
+            ) for shnk in shnk_records
+        ]
+        
+        # Creating SRENSchema instance
+        sren_schema = SRENSchema(
+            sren_name_uz=sren.name,
+            sren_name_ru=sren.name,
+            sren_designation=sren.designation,
+            sren_shnk=shnk_list
+        )
+        sren_list.append(sren_schema)
+    
+    return sren_list
