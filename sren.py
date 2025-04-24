@@ -6,7 +6,7 @@ import pandas as pd
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings.production')
 django.setup()
 
-from django_app.app_shnk.models import SREN, SREN_SHNQ  # ← 'yourapp' ni o'zingizning app nomi bilan almashtiring
+from django_app.app_shnk.models import SREN, SREN_SHNQ  # o'zingizning app nomingizga qarab to'g'rilang
 
 # Excel faylni o'qish
 df = pd.read_excel("sren.xlsx")
@@ -21,14 +21,22 @@ for _, row in df.iterrows():
     # SREN modelini yaratish yoki topish
     sren_obj, _ = SREN.objects.get_or_create(
         designation=sren_designation,
-        defaults={'name': sren_name_uz}
+        defaults={
+            'name': sren_name_uz,
+            'name_uz': sren_name_uz,
+            'name_ru': sren_name_uz
+        }
     )
 
     # SREN_SHNQ modelini yaratish yoki topish
     SREN_SHNQ.objects.get_or_create(
         sren=sren_obj,
         designation=sren_shnk_designation,
-        defaults={'name': sren_shnk_name_uz}
+        defaults={
+            'name': sren_shnk_name_uz,
+            'name_uz': sren_shnk_name_uz,
+            'name_ru': sren_shnk_name_uz
+        }
     )
 
 print("✅ Ma'lumotlar bazaga muvaffaqiyatli yozildi.")
