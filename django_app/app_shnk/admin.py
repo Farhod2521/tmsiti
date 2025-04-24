@@ -43,3 +43,6 @@ class SRENAdmin(ImportExportModelAdmin,TranslationAdmin):
 class SREN_SHNQAdmin(ImportExportModelAdmin,TranslationAdmin):
     list_display = ("name", "designation",)
     search_fields = ("name", "designation")
+
+
+

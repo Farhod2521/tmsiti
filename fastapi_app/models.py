@@ -58,3 +58,25 @@ class Malumotnoma(Base):
     designation = Column(String(100), nullable=False)
     pdf_uz = Column(String, nullable=True)  # Fayl URL sifatida saqlanadi
     pdf_ru = Column(String, nullable=True)
+
+
+class SREN(Base):
+    __tablename__ = "sren"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(500), index=True)
+    designation = Column(String(100), index=True)
+    pdf_uz = Column(String, nullable=True)  # PDF fayl nomi yoki yo'li
+    pdf_ru = Column(String, nullable=True)  # PDF fayl nomi yoki yo'li
+
+    sren_shnk = relationship("SREN_SHNK", back_populates="sren", cascade="all, delete-orphan")
+
+class SREN_SHNK(Base):
+    __tablename__ = "sren_shnk"
+
+    id = Column(Integer, primary_key=True, index=True)
+    sren_id = Column(Integer, ForeignKey("sren.id"))
+    name = Column(String(500), index=True)
+    designation = Column(String(100), index=True)
+
+    sren = relationship("SREN", back_populates="sren_shnk")
