@@ -1,29 +1,23 @@
 from typing import List
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.future import select
+from sqlalchemy.orm import Session
+from fastapi import Depends
 from models import SREN, SREN_SHNK  # SQLAlchemy models
 from schemas.sren_schema import SRENSchema, SREN_SHNKSchema
+from database import get_db  # Dependency to get DB session
 
-# Async function to get all SREN records
-async def get_all_sren(db: AsyncSession) -> List[SRENSchema]:
+def get_all_sren(db: Session) -> List[SRENSchema]:
     sren_list = []
-    # Querying all SREN records asynchronously
-    result = await db.execute(select(SREN))
-    sren_records = result.scalars().all()
+    # Querying all SREN records
+    sren_records = db.query(SREN).all()
 
     for sren in sren_records:
-        # Querying related SREN_SHNK records asynchronously
-        shnk_result = await db.execute(
-            select(SREN_SHNK).filter(SREN_SHNK.sren_id == sren.id)
-        )
-        shnk_records = shnk_result.scalars().all()
-
+        # Querying related SREN_SHNK records
         shnk_list = [
             SREN_SHNKSchema(
                 sren_shnk_uz=shnk.name,
                 sren_shnk_ru=shnk.name,
                 sren_designation=shnk.designation
-            ) for shnk in shnk_records
+            ) for shnk in db.query(SREN_SHNK).filter(SREN_SHNK.sren_id == sren.id).all()
         ]
         
         # Creating SRENSchema instance
