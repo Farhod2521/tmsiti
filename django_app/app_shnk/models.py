@@ -94,6 +94,7 @@ class SREN(models.Model):
     designation = models.CharField(max_length=100, verbose_name="Belgilanishi", db_index=True)
     pdf_uz = models.FileField(upload_to="FILES/shnk", blank=True, null=True)
     pdf_ru = models.FileField(upload_to="FILES/shnk", blank=True, null=True)
+    order = models.PositiveIntegerField(default=0, verbose_name="Tartib raqami")  # ✅ Tartib
 
     class Meta:
         db_table = "sren"
