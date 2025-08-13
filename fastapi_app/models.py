@@ -68,7 +68,7 @@ class SREN(Base):
     designation = Column(String(100), index=True)
     pdf_uz = Column(String, nullable=True)  # PDF fayl nomi yoki yo'li
     pdf_ru = Column(String, nullable=True)  # PDF fayl nomi yoki yo'li
-    order = Column(String(100), index=True)
+    order = Column(Integer, index=True)
     sren_shnk = relationship("SREN_SHNK", back_populates="sren", cascade="all, delete-orphan")
 
 class SREN_SHNK(Base):
