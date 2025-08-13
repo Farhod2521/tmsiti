@@ -35,7 +35,6 @@ class MalumotnomaAdmin(ImportExportModelAdmin,TranslationAdmin):
 @admin.register(SREN)
 class SRENAdmin(ImportExportModelAdmin,TranslationAdmin):
     list_display = ("name", "designation",)
-    # list_editable = ('order')
     search_fields = ("name", "designation")
 
 
