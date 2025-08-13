@@ -15,6 +15,8 @@ class SRENSchema(BaseModel):
     sren_designation: str
     sren_pdf_uz: Optional[str] = None
     sren_pdf_ru: Optional[str] = None
+    order: int  # ✅ Tartib raqami qo‘shildi
+
     sren_shnk: List[SREN_SHNKSchema] = []
 
     class Config:

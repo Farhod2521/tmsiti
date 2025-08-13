@@ -4,19 +4,20 @@ from typing import List
 from models import SREN, SREN_SHNK  # SQLAlchemy models
 from schemas.sren_schema import SRENSchema, SREN_SHNKSchema
 
+
 async def get_all_sren(db: AsyncSession) -> List[SRENSchema]:
     sren_list = []
 
-    # Use select() instead of query() for AsyncSession
-    result = await db.execute(select(SREN))
+    # ✅ order bo‘yicha tartib
+    result = await db.execute(select(SREN).order_by(SREN.order.asc()))
     sren_records = result.scalars().all()
 
     for sren in sren_records:
-        # Use select() for related SREN_SHNK records
-        shnk_result = await db.execute(select(SREN_SHNK).filter(SREN_SHNK.sren_id == sren.id))
+        shnk_result = await db.execute(
+            select(SREN_SHNK).filter(SREN_SHNK.sren_id == sren.id)
+        )
         shnk_records = shnk_result.scalars().all()
 
-        # Create a list of SREN_SHNKSchema
         shnk_list = [
             SREN_SHNKSchema(
                 sren_shnk_uz=shnk.name,
@@ -25,14 +26,13 @@ async def get_all_sren(db: AsyncSession) -> List[SRENSchema]:
             ) for shnk in shnk_records
         ]
 
-        # Create the SRENSchema instance for the SREN
         sren_schema = SRENSchema(
             sren_name_uz=sren.name,
             sren_name_ru=sren.name,
-            sren_pdf_uz= sren.pdf_uz,
-            sren_pdf_ru= sren.pdf_ru,
+            sren_pdf_uz=sren.pdf_uz,
+            sren_pdf_ru=sren.pdf_ru,
             sren_designation=sren.designation,
-
+            order=sren.order,  # ✅ Tartib raqami API’da chiqadi
             sren_shnk=shnk_list
         )
         sren_list.append(sren_schema)
