@@ -64,7 +64,8 @@ class SREN(Base):
     __tablename__ = "sren"
 
     id = Column(Integer, primary_key=True, index=True)
-    name = Column(String(500), index=True)
+    name_uz = Column(String(500), index=True)
+    name_ru = Column(String(500), index=True)
     designation = Column(String(100), index=True)
     pdf_uz = Column(String, nullable=True)  # PDF fayl nomi yoki yo'li
     pdf_ru = Column(String, nullable=True)  # PDF fayl nomi yoki yo'li

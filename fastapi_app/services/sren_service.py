@@ -27,8 +27,8 @@ async def get_all_sren(db: AsyncSession) -> List[SRENSchema]:
         ]
 
         sren_schema = SRENSchema(
-            sren_name_uz=sren.name,
-            sren_name_ru=sren.name,
+            sren_name_uz=sren.name_uz,
+            sren_name_ru=sren.name_ru,
             sren_pdf_uz=sren.pdf_uz,
             sren_pdf_ru=sren.pdf_ru,
             sren_designation=sren.designation,
