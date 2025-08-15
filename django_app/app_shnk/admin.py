@@ -39,7 +39,8 @@ class SRENAdmin(ImportExportModelAdmin, TranslationAdmin):
     search_fields = ("name", "designation")
 @admin.register(SREN_SHNQ)
 class SREN_SHNQAdmin(ImportExportModelAdmin,TranslationAdmin):
-    list_display = ("name", "designation",)
+    list_display = ("name_uz","name_ru")
+    list_editable = ("name_uz", "name_ru")
     search_fields = ("name", "designation")
 
 
