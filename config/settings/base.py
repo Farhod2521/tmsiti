@@ -17,6 +17,8 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'import_export',
     'corsheaders',
+    'rest_framework',
+    'django_filters',
     "django_app.app_shnk"
 ]
 
@@ -49,6 +51,25 @@ TEMPLATES = [
     },
 ]
 
+REST_FRAMEWORK = {
+    # Default authentication methods (token yoki session)
+    'DEFAULT_AUTHENTICATION_CLASSES': [
+        'rest_framework.authentication.SessionAuthentication',
+        'rest_framework.authentication.BasicAuthentication',
+        # Agar JWT ishlatsangiz: 'rest_framework_simplejwt.authentication.JWTAuthentication',
+    ],
+
+    # Default permission
+    'DEFAULT_PERMISSION_CLASSES': [
+        'rest_framework.permissions.AllowAny',  # yoki IsAuthenticated
+    ],
+
+    # Pagination
+    'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
+    'PAGE_SIZE': 10,
+
+
+}
 WSGI_APPLICATION = 'config.wsgi.application'
 CORS_ALLOW_ALL_ORIGINS = True
 AUTH_PASSWORD_VALIDATORS = [
