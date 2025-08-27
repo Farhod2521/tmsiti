@@ -29,8 +29,8 @@ class Qurilish_reglaamentAdmin(ImportExportModelAdmin,TranslationAdmin):
 
 @admin.register(Texnik_reglaament)
 class Texnik_reglaamentAdmin(ImportExportModelAdmin,TranslationAdmin):
-    list_display = ("name",)
-    search_fields = ("name",)
+    list_display = ("name")
+    search_fields = ("name")
 
 
 @admin.register(Malumotnoma)
@@ -42,12 +42,12 @@ class MalumotnomaAdmin(ImportExportModelAdmin,TranslationAdmin):
 @admin.register(SREN)
 class SRENAdmin(ImportExportModelAdmin, TranslationAdmin):
     list_display = ("name_uz","name_ru", "designation", "order")
-    list_editable = ("order","name_uz", "name_ru")
+    # list_editable = ("order","name_uz", "name_ru")
     search_fields = ("name", "designation")
 @admin.register(SREN_SHNQ)
 class SREN_SHNQAdmin(ImportExportModelAdmin,TranslationAdmin):
     list_display = ("name_uz","name_ru")
-    list_editable = ("name_uz", "name_ru")
+    # list_editable = ("name_uz", "name_ru")
     search_fields = ("name", "designation")
 
 
