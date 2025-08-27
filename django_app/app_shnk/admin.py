@@ -29,8 +29,8 @@ class Qurilish_reglaamentAdmin(ImportExportModelAdmin,TranslationAdmin):
 
 @admin.register(Texnik_reglaament)
 class Texnik_reglaamentAdmin(ImportExportModelAdmin,TranslationAdmin):
-    list_display = ("name")
-    search_fields = ("name")
+    list_display = ("name",)
+    search_fields = ("name",)
 
 
 @admin.register(Malumotnoma)
