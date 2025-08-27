@@ -18,7 +18,7 @@ INSTALLED_APPS = [
     'import_export',
     'corsheaders',
     'rest_framework',
-    'django_filters',
+
     "django_app.app_shnk"
 ]
 
