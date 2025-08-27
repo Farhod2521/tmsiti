@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Subsystem, ShnkGroup, Shnk, Qurilish_reglaament, Malumotnoma, SREN, SREN_SHNQ
+from .models import Subsystem, ShnkGroup, Shnk, Qurilish_reglaament, Malumotnoma, SREN, SREN_SHNQ, Texnik_reglaament
 from modeltranslation.admin import TranslationAdmin
 from import_export.admin import  ImportExportModelAdmin
 @admin.register(Subsystem)
@@ -25,6 +25,13 @@ class ShnkAdmin(TranslationAdmin):
 class Qurilish_reglaamentAdmin(ImportExportModelAdmin,TranslationAdmin):
     list_display = ("group","name", "designation",)
     search_fields = ("name", "designation")
+
+
+@admin.register(Texnik_reglaament)
+class Texnik_reglaamentAdmin(ImportExportModelAdmin,TranslationAdmin):
+    list_display = ("name",)
+    search_fields = ("name",)
+
 
 @admin.register(Malumotnoma)
 class MalumotnomaAdmin(ImportExportModelAdmin,TranslationAdmin):

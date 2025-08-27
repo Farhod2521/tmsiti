@@ -109,3 +109,15 @@ class  SREN_SHNQ(models.Model):
         db_table = "sren_shnk"
         verbose_name = "SREN_SHNKQ"
         verbose_name_plural = "SREN_SHNKQ"
+
+
+
+class Texnik_reglaament(models.Model):
+    name = models.CharField(max_length=500, verbose_name="Nomi", db_index=True)
+    pdf_uz = models.FileField(upload_to="FILES/shnk", blank=True, null=True)
+    pdf_ru = models.FileField(upload_to="FILES/shnk", blank=True, null=True)
+
+    class Meta:
+        db_table = "Texnik_reglaament"
+        verbose_name = "Texnik_reglaament"
+        verbose_name_plural = "Texnik_reglaament"
