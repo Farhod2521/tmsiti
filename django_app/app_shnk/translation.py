@@ -1,5 +1,5 @@
 from modeltranslation.translator import translator, TranslationOptions
-from .models import Shnk, Qurilish_reglaament, Malumotnoma, Subsystem, ShnkGroup, SREN, SREN_SHNQ
+from .models import Shnk, Qurilish_reglaament, Malumotnoma, Subsystem, ShnkGroup, SREN, SREN_SHNQ, Texnik_reglaament
 
 
 class SubsystemTranslationOptions(TranslationOptions):
@@ -24,6 +24,12 @@ class Qurilish_reglaamentTranslationOptions(TranslationOptions):
     fields = ('group','name',)
 
 translator.register(Qurilish_reglaament, Qurilish_reglaamentTranslationOptions)
+
+
+class Texnik_reglaamentTranslationOptions(TranslationOptions):
+    fields = ('name',)
+
+translator.register(Texnik_reglaament, Texnik_reglaamentTranslationOptions)
 
 
 class MalumotnomaTranslationOptions(TranslationOptions):
