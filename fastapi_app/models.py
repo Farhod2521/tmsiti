@@ -77,7 +77,8 @@ class SREN_SHNK(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     sren_id = Column(Integer, ForeignKey("sren.id"))
-    name = Column(String(500), index=True)
+    name_uz = Column(String(500), index=True)
+    name_ru = Column(String(500), index=True)
     designation = Column(String(100), index=True)
 
     sren = relationship("SREN", back_populates="sren_shnk")
