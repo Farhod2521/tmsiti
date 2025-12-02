@@ -121,3 +121,22 @@ class Texnik_reglaament(models.Model):
         db_table = "Texnik_reglaament"
         verbose_name = "Texnik_reglaament"
         verbose_name_plural = "Texnik_reglaament"
+
+
+
+class Standard(models.Model):
+    title = models.CharField(max_length=512, verbose_name="Sarlavha (default)")
+    designation = models.CharField(max_length=255, verbose_name="Belgilanish (default)")
+    pdf = models.URLField(verbose_name="PDF havolasi", max_length=1000)
+    slug = models.SlugField(max_length=100, unique=True, verbose_name="Slug")
+    number = models.PositiveIntegerField(verbose_name="Raqam")
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="Yaratilgan vaqti")
+    updated_at = models.DateTimeField(auto_now=True, verbose_name="O'zgartirilgan vaqti")
+
+    class Meta:
+        verbose_name = "Standart hujjat"
+        verbose_name_plural = "Standart hujjatlar"
+        ordering = ["-number"]
+
+    def __str__(self):
+        return f"{self.designation} - {self.title}"
