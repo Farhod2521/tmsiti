@@ -18,15 +18,15 @@ except admin.sites.NotRegistered:
 @admin.register(User)
 class UserAdmin(BaseUserAdmin):
     # Faqat displaylar kerak bo‘lsa qo‘shish mumkin
-    list_display = ("id", "phone", "role", "is_staff", "is_superuser")
-    search_fields = ("phone", "role")
+    list_display = ("id",  "is_staff", "is_superuser")
+
 
     # Username olib tashlanganligi uchun kerak
     fieldsets = (
-        (None, {"fields": ("phone", "password")}),
+        (None, {"fields": ("password")}),
         ("Permissions", {"fields": ("is_active", "is_staff", "is_superuser", "groups", "user_permissions")}),
         ("Important dates", {"fields": ("last_login", "date_joined")}),
-        ("Role", {"fields": ("role",)}),
+
     )
 
     add_fieldsets = (
@@ -34,7 +34,7 @@ class UserAdmin(BaseUserAdmin):
             None,
             {
                 "classes": ("wide",),
-                "fields": ("phone", "password1", "password2", "role", "is_staff", "is_superuser"),
+                "fields": ("password1", "password2",  "is_staff", "is_superuser"),
             },
         ),
     )

@@ -104,7 +104,7 @@ LOCALE_PATHS = [
     BASE_DIR / 'locale/',
 ]
 MODELTRANSLATION_DEFAULT_LANGUAGE = 'uz'
-AUTH_USER_MODEL = "django_app.User"
+
 STATIC_URL = '/static/'
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 STATICFILES_DIRS = [
