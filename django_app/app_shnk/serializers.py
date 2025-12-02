@@ -10,4 +10,4 @@ class TexnikReglaamentSerializer(serializers.ModelSerializer):
 class StandardSerializer(serializers.ModelSerializer):
     class Meta:
         model = Standard
-        fields = '__all__'
+        exclude = ["pdf"]  # PDF qaytmasin!
