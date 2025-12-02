@@ -124,20 +124,43 @@ class Texnik_reglaament(models.Model):
 
 
 
+import re
+from django.utils.text import slugify
+
 class Standard(models.Model):
-    title = models.CharField(max_length=512, verbose_name="Hujjat nomi")
-    designation = models.CharField(max_length=255, verbose_name="Hujjat belgilanishi")
+    title = models.CharField(max_length=512, verbose_name="Sarlavha (default)")
+    designation = models.CharField(max_length=255, verbose_name="Belgilanish (default)")
     pdf = models.FileField(upload_to="FILES/STANDARTLAR")
     slug = models.SlugField(max_length=100, unique=True, verbose_name="Slug")
     number = models.PositiveIntegerField(verbose_name="Raqam")
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="Yaratilgan vaqti")
     updated_at = models.DateTimeField(auto_now=True, verbose_name="O'zgartirilgan vaqti")
 
+    def save(self, *args, **kwargs):
+        # 1) Designation dan faqat harf + raqam qoldiramiz
+        cleaned = re.sub(r'[^A-Za-z0-9]', '', self.designation)
+
+        # 2) O‘z → Oz kabi non-ASCII harflarni ASCII ga o‘tkazamiz
+        cleaned = cleaned.translate(str.maketrans({
+            "’": "", "ʻ": "", "ʼ": "", "‘": "",
+            "Oʻ": "Oz", "oʻ": "oz",
+            "O‘": "Oz", "o‘": "oz",
+            "O`": "Oz", "o`": "oz",
+            "O´": "Oz", "o´": "oz",
+            "Ў": "O", "ў": "o",
+            "М": "M", "м": "m",
+            "С": "S", "с": "s",
+            "Т": "T", "т": "t",
+            "І": "I", "і": "i",
+        }))
+
+        # 3) slug sifatida yozamiz
+        self.slug = cleaned.lower()
+
+        super().save(*args, **kwargs)
+
     class Meta:
         verbose_name = "Standart hujjat"
         verbose_name_plural = "Standart hujjatlar"
         ordering = ["-number"]
-
-    def __str__(self):
-        return f"{self.designation} - {self.title}"
 

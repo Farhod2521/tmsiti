@@ -100,7 +100,7 @@ class StandardAdmin(TranslationAdmin):
             )
         }),
         ("Tizim ma'lumotlari", {
-            "fields": (
+            "fields": (  
                 "created_at",
                 "updated_at",
             )
