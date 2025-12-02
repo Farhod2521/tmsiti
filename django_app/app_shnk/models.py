@@ -141,19 +141,3 @@ class Standard(models.Model):
     def __str__(self):
         return f"{self.designation} - {self.title}"
 
-class Standards(models.Model):
-    title = models.CharField(max_length=512, verbose_name="Sarlavha (default)")
-    designation = models.CharField(max_length=255, verbose_name="Belgilanish (default)")
-    pdf = models.FileField(upload_to="FILES/STANDARTLAR")
-    slug = models.SlugField(max_length=100, unique=True, verbose_name="Slug")
-    number = models.PositiveIntegerField(verbose_name="Raqam")
-    created_at = models.DateTimeField(auto_now_add=True, verbose_name="Yaratilgan vaqti")
-    updated_at = models.DateTimeField(auto_now=True, verbose_name="O'zgartirilgan vaqti")
-
-    class Meta:
-        verbose_name = "Standart hujjat"
-        verbose_name_plural = "Standart hujjatlar"
-        ordering = ["-number"]
-
-    def __str__(self):
-        return f"{self.designation} - {self.title}"
