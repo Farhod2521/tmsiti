@@ -97,6 +97,7 @@ USE_L10N = True
 LANGUAGES = (
     ('uz', 'Uzbek'),
     ('ru', 'Russion'),
+    ('en', 'English'),
 )
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/4.2/howto/static-files/
