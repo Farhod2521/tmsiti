@@ -129,3 +129,69 @@ class StandardPdfToImagesAPIView(APIView):
 
     # OPTIONAL: Agar ko'p so'rov bo'lsa, background task qo'shish
     # Celery yoki Django Background Tasks dan foydalanish mumkin
+
+
+
+
+class StandardListAPIView(APIView):
+    """
+    3 ta til uchun Standard modelini ro'yxatini qaytaruvchi APIView
+    GET parametrlarida ?lang= uz, ?lang=ru, ?lang=en
+    """
+    
+    def get(self, request, format=None):
+        """Tilga qarab standartlar ro'yxatini qaytarish"""
+        
+        # Til parametrini olish (?lang=uz, ?lang=ru, ?lang=en)
+        lang = request.GET.get('lang', 'uz')
+        
+        # Tahrirlangan til uchun field nomlari
+        title_field = f'title_{lang}'
+        designation_field = f'designation_{lang}'
+        
+        # Modelda til maydonlari mavjudligini tekshirish
+        # Agar modelda til maydonlari bo'lmasa, default fieldlardan foydalanish
+        try:
+            # Standartlarni olish
+            standards = Standard.objects.all()
+            
+            # Har bir standart uchun tilga mos ma'lumotlarni tayyorlash
+            data = []
+            for standard in standards:
+                standard_data = {
+                    'id': standard.id,
+                    'slug': standard.slug,
+                    'number': standard.number,
+                    'pdf': request.build_absolute_uri(standard.pdf.url) if standard.pdf else None,
+                    'created_at': standard.created_at,
+                    'updated_at': standard.updated_at,
+                }
+                
+                # Agar modelda title_uz, title_ru, title_en maydonlari bo'lsa
+                if hasattr(standard, title_field):
+                    standard_data['title'] = getattr(standard, title_field, '')
+                else:
+                    # Agar til maydonlari bo'lmasa, default title ishlatiladi
+                    standard_data['title'] = standard.title
+                
+                # Agar modelda designation_uz, designation_ru, designation_en maydonlari bo'lsa
+                if hasattr(standard, designation_field):
+                    standard_data['designation'] = getattr(standard, designation_field, '')
+                else:
+                    # Agar til maydonlari bo'lmasa, default designation ishlatiladi
+                    standard_data['designation'] = standard.designation
+                
+                data.append(standard_data)
+            
+            return Response({
+                'success': True,
+                'language': lang,
+                'count': len(data),
+                'data': data
+            }, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            return Response({
+                'success': False,
+                'error': str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
