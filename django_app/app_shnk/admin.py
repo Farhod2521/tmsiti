@@ -5,11 +5,41 @@ from import_export.admin import  ImportExportModelAdmin
 
 
 from django.contrib.auth import get_user_model
-from django.contrib.auth.admin import UserAdmin
+from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 
 User = get_user_model()
 
-admin.site.register(User, UserAdmin)
+# Agar oldin register bo‘lgan bo‘lsa — o‘chirib yuboramiz
+try:
+    admin.site.unregister(User)
+except admin.sites.NotRegistered:
+    pass
+
+@admin.register(User)
+class UserAdmin(BaseUserAdmin):
+    # Faqat displaylar kerak bo‘lsa qo‘shish mumkin
+    list_display = ("id", "phone", "role", "is_staff", "is_superuser")
+    search_fields = ("phone", "role")
+
+    # Username olib tashlanganligi uchun kerak
+    fieldsets = (
+        (None, {"fields": ("phone", "password")}),
+        ("Permissions", {"fields": ("is_active", "is_staff", "is_superuser", "groups", "user_permissions")}),
+        ("Important dates", {"fields": ("last_login", "date_joined")}),
+        ("Role", {"fields": ("role",)}),
+    )
+
+    add_fieldsets = (
+        (
+            None,
+            {
+                "classes": ("wide",),
+                "fields": ("phone", "password1", "password2", "role", "is_staff", "is_superuser"),
+            },
+        ),
+    )
+
+    ordering = ("id",)
 
 @admin.register(Subsystem)
 class SubsystemAdmin(TranslationAdmin):
