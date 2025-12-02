@@ -137,25 +137,22 @@ class Standard(models.Model):
     updated_at = models.DateTimeField(auto_now=True, verbose_name="O'zgartirilgan vaqti")
 
     def save(self, *args, **kwargs):
-        # 1) Designation dan faqat harf + raqam qoldiramiz
-        cleaned = re.sub(r'[^A-Za-z0-9]', '', self.designation)
+        # 1) designation ichidagi kirill va maxsus belgilarni ASCII ga o‘tkazamiz
+        clean = (
+            self.designation
+                .replace("O‘", "Oz").replace("o‘", "oz")
+                .replace("Oʻ", "Oz").replace("oʻ", "oz")
+                .replace("Ў", "O").replace("ў", "o")
+                .replace("М", "M").replace("м", "m")
+                .replace("С", "S").replace("с", "s")
+                .replace("Т", "T").replace("т", "t")
+        )
 
-        # 2) O‘z → Oz kabi non-ASCII harflarni ASCII ga o‘tkazamiz
-        cleaned = cleaned.translate(str.maketrans({
-            "’": "", "ʻ": "", "ʼ": "", "‘": "",
-            "Oʻ": "Oz", "oʻ": "oz",
-            "O‘": "Oz", "o‘": "oz",
-            "O`": "Oz", "o`": "oz",
-            "O´": "Oz", "o´": "oz",
-            "Ў": "O", "ў": "o",
-            "М": "M", "м": "m",
-            "С": "S", "с": "s",
-            "Т": "T", "т": "t",
-            "І": "I", "і": "i",
-        }))
+        # 2) faqat harf va raqamlarni qoldiramiz
+        clean = re.sub(r'[^A-Za-z0-9]', '', clean)
 
-        # 3) slug sifatida yozamiz
-        self.slug = cleaned.lower()
+        # 3) slug sifatida saqlaymiz (kichik qilib)
+        self.slug = clean.lower()
 
         super().save(*args, **kwargs)
 
