@@ -22,22 +22,6 @@ class UserAdmin(BaseUserAdmin):
 
 
     # Username olib tashlanganligi uchun kerak
-    fieldsets = (
-        (None, {"fields": ("password")}),
-        ("Permissions", {"fields": ("is_active", "is_staff", "is_superuser", "groups", "user_permissions")}),
-        ("Important dates", {"fields": ("last_login", "date_joined")}),
-
-    )
-
-    add_fieldsets = (
-        (
-            None,
-            {
-                "classes": ("wide",),
-                "fields": ("password1", "password2",  "is_staff", "is_superuser"),
-            },
-        ),
-    )
 
     ordering = ("id",)
 
