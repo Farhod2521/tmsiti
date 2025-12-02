@@ -127,7 +127,7 @@ class Texnik_reglaament(models.Model):
 class Standard(models.Model):
     title = models.CharField(max_length=512, verbose_name="Sarlavha (default)")
     designation = models.CharField(max_length=255, verbose_name="Belgilanish (default)")
-    pdf = models.FileField(upload_to="/media/STANDARTLAR")
+    pdf = models.FileField(upload_to="FILES/STANDARTLAR")
     slug = models.SlugField(max_length=100, unique=True, verbose_name="Slug")
     number = models.PositiveIntegerField(verbose_name="Raqam")
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="Yaratilgan vaqti")
