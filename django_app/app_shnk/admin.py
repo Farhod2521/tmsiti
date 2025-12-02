@@ -4,7 +4,12 @@ from modeltranslation.admin import TranslationAdmin, TabbedTranslationAdmin
 from import_export.admin import  ImportExportModelAdmin
 
 
+from django.contrib.auth import get_user_model
+from django.contrib.auth.admin import UserAdmin
 
+User = get_user_model()
+
+admin.site.register(User, UserAdmin)
 
 @admin.register(Subsystem)
 class SubsystemAdmin(TranslationAdmin):
