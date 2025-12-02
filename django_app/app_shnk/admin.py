@@ -76,7 +76,7 @@ class SREN_SHNQAdmin(ImportExportModelAdmin,TranslationAdmin):
 
 
 @admin.register(Standard)
-class StandardAdmin(TabbedTranslationAdmin):
+class StandardAdmin(TranslationAdmin):
     list_display = ('id', 'designation', 'title', 'number', 'created_at')
     list_display_links = ('id', 'designation', 'title')
     search_fields = ('title', 'title_uz', 'title_ru', 'title_en',
