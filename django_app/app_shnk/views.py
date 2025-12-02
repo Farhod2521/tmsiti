@@ -26,6 +26,7 @@ import threading
 from PIL import Image
 import io
 from pdf2image import convert_from_path
+import os
 class StandardPdfToImagesAPIView(APIView):
     """
     PDF sahifalarini rasmga aylantirib, SAQLAMASDAN base64 ko'rinishda qaytaradi.
