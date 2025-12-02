@@ -30,64 +30,83 @@ import os
 
 class StandardPdfToImagesAPIView(APIView):
     """
-    PDF sahifalarini rasmga aylantirib, SAQLAMASDAN base64 ko'rinishda qaytaradi.
-    Faqat 10 ta sahifani ko'rsatadi.
+    PDF sahifalarini rasmga aylantirib, base64 ko'rinishida qaytaradi.
+    Pagination: ?page=2&limit=10
     """
 
     _thread_local = threading.local()
 
     def get(self, request, slug):
-        page_limit = 10
+        # Pagination parametrlari
+        page = int(request.GET.get("page", 1))
+        limit = int(request.GET.get("limit", 10))
 
-        # Cache key'lar
-        cache_key = f"pdf_images_{slug}_{page_limit}"
+        # Sahifa boshlanishi / tugashi
+        start_page = (page - 1) * limit + 1
+        end_page = start_page + limit - 1
+
+        cache_key = f"pdf_images_{slug}_{page}_{limit}"
         hash_cache_key = f"pdf_hash_{slug}"
 
-        # PDF modelini olish
         try:
             standard = Standard.objects.only('pdf').get(slug=slug)
         except Standard.DoesNotExist:
-            return Response({"detail": "Hujjat topilmadi."}, status=status.HTTP_404_NOT_FOUND)
+            return Response({"detail": "Hujjat topilmadi."}, status=404)
 
         pdf_path = standard.pdf.path
 
-        # PDF metadata hashini hisoblash
+        # PDF hash
         file_hash = self._get_file_metadata_hash(pdf_path)
-
-        # OLD HASH NI OLYAPMIZ
         old_hash = cache.get(hash_cache_key)
 
-        # 🟢 Agar PDF o‘zgarmagan bo‘lsa → cache’dan chiqaramiz
+        # Agar PDF o‘zgarmagan bo‘lsa — cache'dan beramiz
         if old_hash == file_hash:
             cached_data = cache.get(cache_key)
             if cached_data:
                 return Response(cached_data)
 
-        # 🔴 PDF O'ZGARGAN BO'LSA — eskilarni o‘chirib yuboramiz
+        # PDF o'zgargan bo'lsa — eski cache'ni o'chiramiz
         cache.delete(cache_key)
         cache.delete(hash_cache_key)
 
-        # PDF'ni o‘qish va rasmga aylantirish
+        # PDF umumiy sahifalar soni
+        total_pages = self._get_total_pages(pdf_path)
+
+        # End_page PDF dan oshib ketmasin
+        end_page = min(end_page, total_pages)
+
+        if start_page > total_pages:
+            return Response({"detail": "Bu sahifa mavjud emas"}, status=404)
+
         try:
-            pages = self._convert_pdf_optimized(pdf_path, page_limit=page_limit)
-            actual_pages = min(len(pages), page_limit)
-            pages = pages[:actual_pages]
-
+            pages = convert_from_path(
+                pdf_path,
+                dpi=120,
+                first_page=start_page,
+                last_page=end_page,
+                thread_count=2,
+                grayscale=True,
+                size=(1200, None),
+                fmt='jpeg',
+                jpegopt={"quality": 80, "optimize": True, "progressive": True},
+                strict=False,
+                use_pdftocairo=True
+            )
         except Exception as e:
-            return Response({"detail": f"PDFni o'qishda xatolik: {str(e)}"}, status=500)
+            return Response({"detail": f"PDF konvertatsiya xatosi: {str(e)}"}, status=500)
 
-        # Base64 encoding
         images_base64 = self._encode_images_optimized(pages)
 
         response_data = {
             "slug": slug,
+            "page": page,
+            "limit": limit,
             "page_count": len(images_base64),
-            "total_pages": self._get_total_pages(pdf_path) if pages else 0,
-            "images": images_base64,
-            "note": f"Faqat dastlabki {len(images_base64)} sahifa ko'rsatilmoqda"
+            "total_pages": total_pages,
+            "images": images_base64
         }
 
-        # 🟢 Yangi ma’lumotlarni cache'ga saqlaymiz
+        # Yangi cache yozish
         cache.set(cache_key, response_data, timeout=1800)
         cache.set(hash_cache_key, file_hash, timeout=1800)
 
