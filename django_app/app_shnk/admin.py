@@ -1,6 +1,6 @@
 from django.contrib import admin
-from .models import Subsystem, ShnkGroup, Shnk, Qurilish_reglaament, Malumotnoma, SREN, SREN_SHNQ, Texnik_reglaament
-from modeltranslation.admin import TranslationAdmin
+from .models import Subsystem, ShnkGroup, Shnk, Qurilish_reglaament, Malumotnoma, SREN, SREN_SHNQ, Texnik_reglaament, Standard
+from modeltranslation.admin import TranslationAdmin, TabbedTranslationAdmin
 from import_export.admin import  ImportExportModelAdmin
 @admin.register(Subsystem)
 class SubsystemAdmin(TranslationAdmin):
@@ -52,3 +52,34 @@ class SREN_SHNQAdmin(ImportExportModelAdmin,TranslationAdmin):
 
 
 
+@admin.register(Standard)
+class StandardAdmin(TabbedTranslationAdmin):
+    list_display = ('id', 'designation', 'title', 'number', 'created_at')
+    list_display_links = ('id', 'designation', 'title')
+    search_fields = ('title', 'title_uz', 'title_ru', 'title_en',
+                     'designation', 'designation_uz', 'designation_ru', 'designation_en')
+    list_filter = ('created_at',)
+
+    prepopulated_fields = {
+        'slug': ('title',)
+    }
+
+    readonly_fields = ('created_at', 'updated_at')
+
+    fieldsets = (
+        ("Asosiy ma'lumotlar", {
+            "fields": (
+                "title",
+                "designation",
+                "slug",
+                "number",
+                "pdf",
+            )
+        }),
+        ("Tizim ma'lumotlari", {
+            "fields": (
+                "created_at",
+                "updated_at",
+            )
+        }),
+    )

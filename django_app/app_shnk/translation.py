@@ -1,5 +1,12 @@
 from modeltranslation.translator import translator, TranslationOptions
-from .models import Shnk, Qurilish_reglaament, Malumotnoma, Subsystem, ShnkGroup, SREN, SREN_SHNQ, Texnik_reglaament
+from .models import Shnk, Qurilish_reglaament, Malumotnoma, Subsystem, ShnkGroup, SREN, SREN_SHNQ, Texnik_reglaament, Standard
+
+
+class StandardTranslationOptions(TranslationOptions):
+    fields = ('title', 'designation')
+
+
+translator.register(Standard, StandardTranslationOptions)
 
 
 class SubsystemTranslationOptions(TranslationOptions):
