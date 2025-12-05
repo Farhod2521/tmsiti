@@ -37,6 +37,7 @@ class Shnk(models.Model):
     pdf_uz = models.FileField(upload_to="FILES/shnk", blank=True, null=True)
     pdf_ru = models.FileField(upload_to="FILES/shnk", blank=True, null=True)
     url = models.CharField(max_length=500, verbose_name="Url", blank=True, null=True)
+    order =  models.PositiveIntegerField(default=0)
 
     class Meta:
         db_table = "shnks"
@@ -49,7 +50,7 @@ class Shnk(models.Model):
 
     def __str__(self):
         return self.name
-    
+
 
 
 class Qurilish_reglaament(models.Model):
