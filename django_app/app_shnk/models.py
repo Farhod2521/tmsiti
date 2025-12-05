@@ -47,7 +47,32 @@ class Shnk(models.Model):
             models.Index(fields=["name"]),  
             models.Index(fields=["designation"]),  
         ]
+    def save(self, *args, **kwargs):
+        # yangi obyektmi yoki yangilanayotganmi — tekshiramiz
+        is_new = self.pk is None
 
+        if is_new:
+            # Agar yangi qo‘shilayotgan bo‘lsa
+            Shnk.objects.filter(order__gte=self.order).update(order=models.F("order") + 1)
+        else:
+            # Eski obyekt o‘zgartirilsa
+            old_order = Shnk.objects.get(pk=self.pk).order
+
+            # Agar yangi order eski orderdan kichik bo‘lsa → pastdagilarni ko‘taramiz
+            if self.order < old_order:
+                Shnk.objects.filter(
+                    order__gte=self.order,
+                    order__lt=old_order
+                ).update(order=models.F("order") + 1)
+
+            # Agar yangi order eski orderdan katta bo‘lsa → yuqoridagilarni kamaytiramiz
+            elif self.order > old_order:
+                Shnk.objects.filter(
+                    order__lte=self.order,
+                    order__gt=old_order
+                ).update(order=models.F("order") - 1)
+
+        super().save(*args, **kwargs)
     def __str__(self):
         return self.name
 
