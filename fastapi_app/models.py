@@ -30,7 +30,7 @@ class Shnk(Base):
     pdf_uz = Column(String(255), nullable=True)  
     pdf_ru = Column(String(255), nullable=True) 
     url = Column(String(500), nullable=False)
-
+    order = Column(Integer, default=0, index=True)  # 🔥 MUHIM
     shnkgroup_id = Column(Integer, ForeignKey("shnk_groups.id"), nullable=False)
 
     # ShnkGroup bilan bog‘lanish

@@ -14,7 +14,9 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))  # Asosiy loyiha papkasi
 PDF_DIR = r"D:\FASTAPI\tmsiti\media" # PDF fayllar joylashgan papka
 
 async def search_in_shnk_pdf(db: AsyncSession, search_text: str):
-    result = await db.execute(select(Shnk))
+    result = await db.execute(
+        select(Shnk).order_by(Shnk.order)
+    )
     shnks = result.scalars().all()
     
     search_text = search_text.lower()  # Qidirilayotgan matnni kichik harfga o'tkazamiz
