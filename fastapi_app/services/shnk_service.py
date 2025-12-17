@@ -12,10 +12,12 @@ import os
 import difflib
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))  # Asosiy loyiha papkasi
 PDF_DIR = r"D:\FASTAPI\tmsiti\media" # PDF fayllar joylashgan papka
-
+from sqlalchemy.orm import selectinload
 async def search_in_shnk_pdf(db: AsyncSession, search_text: str):
     result = await db.execute(
-        select(Shnk).order_by(Shnk.order)
+        select(Shnk)
+        .options(selectinload(Shnk.shnkgroup))
+        .order_by(Shnk.shnkgroup_id, Shnk.order)  # 🔥 MUHIM
     )
     shnks = result.scalars().all()
     
