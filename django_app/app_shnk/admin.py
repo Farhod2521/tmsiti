@@ -106,3 +106,34 @@ class StandardAdmin(TranslationAdmin):
             )
         }),
     )
+
+
+
+# admin.py
+
+from .models import Quiz, Customer
+
+
+@admin.register(Quiz)
+class QuizAdmin(admin.ModelAdmin):
+    list_display = ("id", "status")
+    list_filter = ("status",)
+    search_fields = ("id",)
+    ordering = ("-id",)
+
+
+@admin.register(Customer)
+class CustomerAdmin(admin.ModelAdmin):
+    list_display = (
+        "id",
+        "full_name",
+        "phone",
+        "email",
+        "corrent_ans",
+        "create_date",
+    )
+    list_filter = ("create_date",)
+    search_fields = ("full_name", "phone", "email")
+    ordering = ("-create_date",)
+
+    readonly_fields = ("create_date",)
