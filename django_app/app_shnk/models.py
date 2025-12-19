@@ -197,7 +197,7 @@ class Quiz(models.Model):
 
 
 class  Customer(models.Model):
-    full_name = models.CharField(max_length=500)
+    full_name = models.CharField(max_length=500, blank=True, null=True)
     phone =  models.CharField(max_length=20)
     email =  models.CharField(max_length=200)
     corrent_ans =  models.PositiveIntegerField()
