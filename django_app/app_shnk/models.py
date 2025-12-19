@@ -198,10 +198,10 @@ class Quiz(models.Model):
 
 class  Customer(models.Model):
     full_name = models.CharField(max_length=500, blank=True, null=True)
-    phone =  models.CharField(max_length=20)
-    email =  models.CharField(max_length=200)
-    corrent_ans =  models.PositiveIntegerField()
-    result =  models.TextField()
+    phone =  models.CharField(max_length=20, blank=True, null=True)
+    email =  models.CharField(max_length=200, blank=True, null=True)
+    corrent_ans =  models.PositiveIntegerField(blank=True, null=True)
+    result =  models.TextField(blank=True, null=True)
     create_date = models.DateTimeField(auto_now_add=True) 
 
 
