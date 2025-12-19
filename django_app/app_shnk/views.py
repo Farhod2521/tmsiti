@@ -231,3 +231,57 @@ class StandardListAPIView(APIView):
                 "success": False,
                 "error": str(e)
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+
+
+
+
+
+
+
+
+from .models import  Quiz, Customer
+
+
+class QuizListAPIView(APIView):
+    def get(self, request):
+        quizzes = Quiz.objects.filter(status=True)
+
+        data = []
+        for quiz in quizzes:
+            data.append({
+                "id": quiz.id,
+                "json": quiz.json,
+                "status": quiz.status
+            })
+
+        return Response(data, status=status.HTTP_200_OK)
+    
+class CustomerCreateAPIView(APIView):
+    def post(self, request):
+        data = request.data
+
+        # Minimal tekshiruv
+        required_fields = ["full_name", "phone", "email", "corrent_ans", "result"]
+        for field in required_fields:
+            if field not in data:
+                return Response(
+                    {"error": f"{field} majburiy"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+        customer = Customer.objects.create(
+            full_name=data["full_name"],
+            phone=data["phone"],
+            email=data["email"],
+            corrent_ans=data["corrent_ans"],
+            result=data["result"],
+        )
+
+        return Response(
+            {
+                "message": "Customer muvaffaqiyatli yaratildi",
+                "id": customer.id
+            },
+            status=status.HTTP_201_CREATED
+        )

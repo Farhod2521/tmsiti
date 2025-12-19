@@ -187,3 +187,23 @@ class Standard(models.Model):
         verbose_name_plural = "Standart hujjatlar"
         ordering = ["-number"]
 
+
+
+
+
+class Quiz(models.Model):
+    json =  models.JSONField()
+    status  =  models.BooleanField(default=True)
+
+
+class  Customer(models.Model):
+    full_name = models.CharField(max_length=500)
+    phone =  models.CharField(max_length=20)
+    email =  models.CharField(max_length=200)
+    corrent_ans =  models.PositiveIntegerField()
+    result =  models.TextField()
+    create_date =  models.DateTimeField(auto_created=True)
+
+
+    def __str__(self):
+        return self.full_name
