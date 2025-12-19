@@ -257,31 +257,26 @@ class QuizListAPIView(APIView):
 
         return Response(data, status=status.HTTP_200_OK)
     
+from django.views.decorators.csrf import csrf_exempt
+from django.utils.decorators import method_decorator
+from rest_framework.permissions import AllowAny
+@method_decorator(csrf_exempt, name='dispatch')
 class CustomerCreateAPIView(APIView):
+    authentication_classes = []   # 🔥 MUHIM
+    permission_classes = [AllowAny]
+
     def post(self, request):
         data = request.data
 
-        # Minimal tekshiruv
-        required_fields = ["full_name", "phone", "email", "corrent_ans", "result"]
-        for field in required_fields:
-            if field not in data:
-                return Response(
-                    {"error": f"{field} majburiy"},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-
         customer = Customer.objects.create(
-            full_name=data["full_name"],
-            phone=data["phone"],
-            email=data["email"],
-            corrent_ans=data["corrent_ans"],
-            result=data["result"],
+            full_name=data.get("full_name"),
+            phone=data.get("phone"),
+            email=data.get("email"),
+            corrent_ans=data.get("corrent_ans", 0),
+            result=data.get("result", ""),
         )
 
         return Response(
-            {
-                "message": "Customer muvaffaqiyatli yaratildi",
-                "id": customer.id
-            },
+            {"message": "Customer yaratildi", "id": customer.id},
             status=status.HTTP_201_CREATED
         )
