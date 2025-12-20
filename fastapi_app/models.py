@@ -10,15 +10,21 @@ class Subsystem(Base):
 
     groups = relationship("ShnkGroup", back_populates="subsystem")
 
+
 class ShnkGroup(Base):
     __tablename__ = "shnk_groups"
 
     id = Column(Integer, primary_key=True, index=True)
     title = Column(String(500), index=True)
+    order = Column(Integer, default=0, index=True)  # 🔥 QO‘SHILADI
     subsystem_id = Column(Integer, ForeignKey("subsystems.id"), index=True)
 
     subsystem = relationship("Subsystem", back_populates="groups")
-    shnks = relationship("Shnk", back_populates="shnkgroup")  
+    shnks = relationship(
+        "Shnk",
+        back_populates="shnkgroup",
+        order_by="Shnk.order"   # 🔥 ENG MUHIM QATOR
+    )
 
 class Shnk(Base):
     __tablename__ = "shnks"
