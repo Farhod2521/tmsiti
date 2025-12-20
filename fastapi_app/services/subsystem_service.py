@@ -23,7 +23,8 @@ async def get_subsystems(db: AsyncSession):
                             designation=shnk.designation,
                             pdf_uz=shnk.pdf_uz,
                             pdf_ru=shnk.pdf_ru,
-                            url=shnk.url
+                            url=shnk.url, 
+                            order = shnk.order
                         ) for shnk in group.shnks
                     ]
                 ) for group in subsystem.groups
