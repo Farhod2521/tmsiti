@@ -123,7 +123,7 @@ class QuizAdmin(admin.ModelAdmin):
 
 
 @admin.register(Customer)
-class CustomerAdmin(admin.ModelAdmin):
+class CustomerAdmin(ImportExportModelAdmin):
     list_display = (
         "id",
         "full_name",
