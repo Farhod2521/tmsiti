@@ -41,7 +41,42 @@ async def get_subsystems(db: AsyncSession):
         for subsystem in subsystems
     ]
 
+async def get_subsystems_false(db: AsyncSession):
+    result = await db.execute(
+        select(Subsystem)
+        .options(
+            selectinload(Subsystem.groups)
+            .selectinload(ShnkGroup.shnks)
+        )
+    )
+    subsystems = result.scalars().all()
 
+    return [
+        SubsystemResponse(
+            title=subsystem.title,
+            groups=[
+                ShnkGroupSchema(
+                    title=group.title,
+                    documents=[
+                        ShnkSchema(
+                            name_uz=shnk.name_uz,
+                            name_ru=shnk.name_ru,
+                            designation=shnk.designation,
+                            pdf_uz=shnk.pdf_uz,
+                            pdf_ru=shnk.pdf_ru,
+                            url=shnk.url,
+                            order=shnk.order,
+                            status=shnk.status
+                        )
+                        for shnk in group.shnks
+                        if shnk.status is False
+                    ]
+                )
+                for group in subsystem.groups
+            ]
+        )
+        for subsystem in subsystems
+    ]
 async def filter_subsystems_by_title(db: AsyncSession, title: str):
     result = await db.execute(
         select(Subsystem).where(Subsystem.title.ilike(f"%{title}%")).options(
