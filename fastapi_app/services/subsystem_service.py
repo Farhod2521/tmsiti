@@ -6,7 +6,11 @@ from schemas.subsystem_schema import SubsystemResponse, ShnkGroupSchema, ShnkSch
 
 async def get_subsystems(db: AsyncSession):
     result = await db.execute(
-        select(Subsystem).options(selectinload(Subsystem.groups).selectinload(ShnkGroup.shnks))
+        select(Subsystem)
+        .options(
+            selectinload(Subsystem.groups)
+            .selectinload(ShnkGroup.shnks)
+        )
     )
     subsystems = result.scalars().all()
 
@@ -23,14 +27,20 @@ async def get_subsystems(db: AsyncSession):
                             designation=shnk.designation,
                             pdf_uz=shnk.pdf_uz,
                             pdf_ru=shnk.pdf_ru,
-                            url=shnk.url, 
-                            order = shnk.order
-                        ) for shnk in group.shnks
+                            url=shnk.url,
+                            order=shnk.order,
+                            status=shnk.status
+                        )
+                        for shnk in group.shnks
+                        if shnk.status is True
                     ]
-                ) for group in subsystem.groups
+                )
+                for group in subsystem.groups
             ]
-        ) for subsystem in subsystems
+        )
+        for subsystem in subsystems
     ]
+
 
 async def filter_subsystems_by_title(db: AsyncSession, title: str):
     result = await db.execute(

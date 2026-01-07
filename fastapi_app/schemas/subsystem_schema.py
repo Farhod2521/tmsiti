@@ -9,6 +9,7 @@ class ShnkSchema(BaseModel):
     pdf_ru: Optional[str] = None
     url: Optional[str] = None
     order: int | None = None 
+    status: Optional[bool] = None
 
 class ShnkGroupSchema(BaseModel):
     title: str
