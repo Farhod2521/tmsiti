@@ -38,7 +38,7 @@ class ShnkGroupAdmin(TranslationAdmin):
 
 @admin.register(Shnk)
 class ShnkAdmin(TranslationAdmin):
-    list_display = ("id","order","name", "designation","pdf_uz","pdf_ru","url","shnkgroup")
+    list_display = ("id","order","name", "designation", "status", "pdf_uz","pdf_ru","url","shnkgroup")
     search_fields = ("name", "designation")
     list_filter = ("shnkgroup",)
 
