@@ -208,3 +208,70 @@ class  Customer(models.Model):
 
     def __str__(self):
         return self.full_name
+    
+
+
+
+
+class ShnkGroupInformation(models.Model): 
+    title = models.CharField(max_length=500, verbose_name="Guruhlar", db_index=True)
+
+    class Meta:
+        db_table = "shnk_groups_information"
+        verbose_name = "Guruh Malumotnomalar"
+        verbose_name_plural = "Guruhlar Malumotnomalar"
+        indexes = [
+            models.Index(fields=["title"]),  
+            models.Index(fields=["subsystem"]),  
+        ]
+
+    def __str__(self):
+        return self.title
+    
+class ShnkInformation(models.Model):
+    shnkgroup = models.ForeignKey(ShnkGroup, on_delete=models.CASCADE, db_index=True)
+    name = models.CharField(max_length=500, verbose_name="Nomi", db_index=True)
+    designation = models.CharField(max_length=100, verbose_name="Belgilanishi", db_index=True)
+    change = models.CharField(max_length=100, verbose_name="O'zgargani",blank=True, null=True)
+    pdf_uz = models.FileField(upload_to="FILES/shnk", blank=True, null=True)
+    pdf_ru = models.FileField(upload_to="FILES/shnk", blank=True, null=True)
+    url = models.CharField(max_length=500, verbose_name="Url", blank=True, null=True)
+    order =  models.PositiveIntegerField(default=0)
+    status =  models.BooleanField(default=True)
+
+    class Meta:
+        db_table = "shnks_information"
+        verbose_name = "SHNK Malumotnomalar "
+        verbose_name_plural = "SHNKlar Malumotnomalar"
+        indexes = [
+            models.Index(fields=["name"]),  
+            models.Index(fields=["designation"]),  
+        ]
+    def save(self, *args, **kwargs):
+        # yangi obyektmi yoki yangilanayotganmi — tekshiramiz
+        is_new = self.pk is None
+
+        if is_new:
+            # Agar yangi qo‘shilayotgan bo‘lsa
+            ShnkInformation.objects.filter(order__gte=self.order).update(order=models.F("order") + 1)
+        else:
+            # Eski obyekt o‘zgartirilsa
+            old_order = ShnkInformation.objects.get(pk=self.pk).order
+
+            # Agar yangi order eski orderdan kichik bo‘lsa → pastdagilarni ko‘taramiz
+            if self.order < old_order:
+                ShnkInformation.objects.filter(
+                    order__gte=self.order,
+                    order__lt=old_order
+                ).update(order=models.F("order") + 1)
+
+            # Agar yangi order eski orderdan katta bo‘lsa → yuqoridagilarni kamaytiramiz
+            elif self.order > old_order:
+                ShnkInformation.objects.filter(
+                    order__lte=self.order,
+                    order__gt=old_order
+                ).update(order=models.F("order") - 1)
+
+        super().save(*args, **kwargs)
+    def __str__(self):
+        return self.name
