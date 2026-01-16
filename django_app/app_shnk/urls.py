@@ -1,6 +1,6 @@
 
 from django.urls import path
-from .views import TexnikReglaamentListAPIView, StandardPdfToImagesAPIView, StandardListAPIView, QuizListAPIView, CustomerCreateAPIView, ShnkGroupWithInformationAPIView
+from .views import TexnikReglaamentListAPIView, StandardPdfToImagesAPIView, StandardListAPIView, QuizListAPIView, CustomerCreateAPIView, ShnkGroupWithInformationAPIView, BulkShnkUploadAPIView
 
 urlpatterns = [
     path("texnik-reglament/", TexnikReglaamentListAPIView.as_view(), name="texnik-reglament-list"),
@@ -9,4 +9,5 @@ urlpatterns = [
     path("quiz/list/", QuizListAPIView.as_view()),
     path("customer/create/", CustomerCreateAPIView.as_view()),
     path('shnk-information/groups/', ShnkGroupWithInformationAPIView.as_view()),
+    path('shnk-create/groups/', BulkShnkUploadAPIView.as_view()),
 ]
