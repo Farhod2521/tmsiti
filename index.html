@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html>
+<body>
+
+<h2>SHNK JSON Yuklash</h2>
+
+<textarea id="jsonInput" rows="20" cols="80"></textarea>
+<br><br>
+<button onclick="sendJSON()">POST qilish</button>
+
+<script>
+function sendJSON() {
+    const jsonData = document.getElementById("jsonInput").value;
+    
+    if (!jsonData.trim()) {
+        alert("JSON kiriting!");
+        return;
+    }
+
+    try {
+        // JSON formatini tekshirish
+        JSON.parse(jsonData);
+        
+        // POST so'rovini yuborish
+        fetch('https://main.tmsiti.uz/api/shnk-create/groups/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: jsonData
+        })
+        .then(response => response.json())
+        .then(data => {
+            alert("Muvaffaqiyatli yuborildi!");
+            console.log("Javob:", data);
+        })
+        .catch(error => {
+            alert("Xatolik: " + error);
+        });
+        
+    } catch (e) {
+        alert("Noto'g'ri JSON format: " + e.message);
+    }
+}
+</script>
+
+</body>
+</html>

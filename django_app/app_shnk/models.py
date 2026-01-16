@@ -131,6 +131,8 @@ class SREN(models.Model):
 class  SREN_SHNQ(models.Model):
     sren = models.ForeignKey(SREN, on_delete=models.CASCADE)
     name = models.CharField(max_length=500, verbose_name="Nomi", db_index=True)
+    pdf_uz = models.FileField(upload_to="FILES/shnk", blank=True, null=True)
+    pdf_ru = models.FileField(upload_to="FILES/shnk", blank=True, null=True)
     designation = models.CharField(max_length=100, verbose_name="Belgilanishi", db_index=True)
     class Meta:
         db_table = "sren_shnk"

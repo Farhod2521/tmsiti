@@ -22,6 +22,8 @@ async def get_all_sren(db: AsyncSession) -> List[SRENSchema]:
             SREN_SHNKSchema(
                 sren_shnk_uz=shnk.name_uz,
                 sren_shnk_ru=shnk.name_ru,
+                sren_pdf_uz=shnk.pdf_uz,
+                sren_pdf_ru=shnk.pdf_ru,
                 sren_designation=shnk.designation
             ) for shnk in shnk_records
         ]
