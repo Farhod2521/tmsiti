@@ -296,7 +296,6 @@ class ShnkGroupWithInformationAPIView(APIView):
 class BulkShnkUploadAPIView(APIView):
     """
     SHNK guruhlari va ma'lumotlarini ommaviy yuklash uchun API
-    Uzbek va Rus tillarida
     """
     
     def post(self, request):
@@ -312,31 +311,48 @@ class BulkShnkUploadAPIView(APIView):
                     updated_shnks = []
                     
                     for group_data in shnk_groups_data:
-                        # 1. Guruhni yaratish yoki topish
-                        title_uz = group_data.get('title_uz', '')
-                        title_ru = group_data.get('title_ru', '')
+                        # 1. Guruh ma'lumotlarini tahlil qilish
+                        title = group_data.get('title')
                         
-                        # Agar title_uz bo'sh bo'lsa, sarlavha maydoni bo'lmaydi
-                        if not title_uz:
+                        # Agar title berilmagan bo'lsa, o'tkazib yuborish
+                        if not title:
                             continue
                         
-                        # Guruhni qidirish yoki yaratish
+                        # Tilni aniqlash
+                        title_uz = ''
+                        title_ru = ''
+                        
+                        try:
+                            # Oddiy til aniqlash logikasi
+                            if self.is_cyrillic(title):
+                                title_ru = title
+                                title_uz = self.transliterate_cyrillic_to_latin(title)
+                            else:
+                                title_uz = title
+                                title_ru = ''
+                        except:
+                            # Agar til aniqlashda muammo bo'lsa, ikkala tilga ham bir xil qiymat
+                            title_uz = title
+                            title_ru = title
+                        
+                        # Guruhni yaratish yoki topish
                         group, created = ShnkGroupInformation.objects.get_or_create(
                             title_uz=title_uz,
                             defaults={
-                                'title_ru': title_ru or title_uz
+                                'title_ru': title_ru
                             }
                         )
                         
-                        # Agar mavjud bo'lsa, ruscha sarlavhani yangilash
-                        if not created and title_ru:
-                            group.title_ru = title_ru
-                            group.save()
+                        # Agar mavjud bo'lsa, yangilash
+                        if not created:
+                            if title_ru:
+                                group.title_ru = title_ru
+                                group.save()
                         
                         if created:
                             created_groups.append(title_uz)
                         
-                        # 2. Guruhga tegishli SHNK ma'lumotlarini yaratish
+                        # 2. SHNK ma'lumotlarini qayta ishlash
                         shnk_information_data = group_data.get('shnk_information', [])
                         
                         for shnk_data in shnk_information_data:
@@ -345,15 +361,35 @@ class BulkShnkUploadAPIView(APIView):
                             if not designation:
                                 continue
                             
-                            # SHNK ma'lumotlarini yaratish yoki yangilash
+                            name = shnk_data.get('name', '')
+                            change = shnk_data.get('change', '')
+                            order = shnk_data.get('order', 0)
+                            
+                            # Tilni aniqlash name uchun
+                            name_uz = ''
+                            name_ru = ''
+                            
+                            try:
+                                if self.is_cyrillic(name):
+                                    name_ru = name
+                                    # Ruscha matnni lotin (o'zbek) tiliga o'girish
+                                    name_uz = self.transliterate_cyrillic_to_latin(name)
+                                else:
+                                    name_uz = name
+                                    name_ru = ''
+                            except:
+                                name_uz = name
+                                name_ru = name
+                            
+                            # SHNK yaratish yoki yangilash
                             shnk, shnk_created = ShnkInformation.objects.get_or_create(
                                 shnkgroup=group,
                                 designation=designation,
                                 defaults={
-                                    'name_uz': shnk_data.get('name_uz', ''),
-                                    'name_ru': shnk_data.get('name_ru', ''),
-                                    'change': shnk_data.get('change', ''),
-                                    'order': shnk_data.get('order', 0),
+                                    'name_uz': name_uz,
+                                    'name_ru': name_ru,
+                                    'change': change,
+                                    'order': order,
                                     'status': True
                                 }
                             )
@@ -361,15 +397,11 @@ class BulkShnkUploadAPIView(APIView):
                             if shnk_created:
                                 created_shnks.append(designation)
                             else:
-                                # Agar mavjud bo'lsa, yangilash
-                                if 'name_uz' in shnk_data:
-                                    shnk.name_uz = shnk_data['name_uz']
-                                if 'name_ru' in shnk_data:
-                                    shnk.name_ru = shnk_data['name_ru']
-                                if 'change' in shnk_data:
-                                    shnk.change = shnk_data['change']
-                                if 'order' in shnk_data:
-                                    shnk.order = shnk_data['order']
+                                # Yangilash
+                                shnk.name_uz = name_uz
+                                shnk.name_ru = name_ru
+                                shnk.change = change
+                                shnk.order = order
                                 shnk.save()
                                 updated_shnks.append(designation)
                     
@@ -397,4 +429,50 @@ class BulkShnkUploadAPIView(APIView):
             'errors': serializer.errors,
             'message': 'Yuborilgan ma\'lumotlar noto\'g\'ri formatda'
         }, status=status.HTTP_400_BAD_REQUEST)
+    
+    def is_cyrillic(self, text):
+        """Matn kiril alifbosida yozilganligini tekshirish"""
+        if not text:
+            return False
+        
+        # Kiril harflari
+        cyrillic_pattern = re.compile(r'[а-яА-ЯёЁ]')
+        
+        # Agar matnning kamida 30% kiril harflaridan iborat bo'lsa, ruscha deb hisoblaymiz
+        cyrillic_count = len(cyrillic_pattern.findall(text))
+        total_letters = len([c for c in text if c.isalpha()])
+        
+        if total_letters == 0:
+            return False
+        
+        return (cyrillic_count / total_letters) > 0.3
+    
+    def transliterate_cyrillic_to_latin(self, text):
+        """Kiril matnini lotin (o'zbek) alifbosiga o'girish"""
+        # Soddalashtirilgan transliteratsiya
+        translit_dict = {
+            'а': 'a', 'б': 'b', 'в': 'v', 'г': 'g', 'д': 'd',
+            'е': 'e', 'ё': 'yo', 'ж': 'j', 'з': 'z', 'и': 'i',
+            'й': 'y', 'к': 'k', 'л': 'l', 'м': 'm', 'н': 'n',
+            'о': 'o', 'п': 'p', 'р': 'r', 'с': 's', 'т': 't',
+            'у': 'u', 'ф': 'f', 'х': 'x', 'ц': 'ts', 'ч': 'ch',
+            'ш': 'sh', 'щ': 'shch', 'ъ': '', 'ы': 'i', 'ь': '',
+            'э': 'e', 'ю': 'yu', 'я': 'ya',
+            'А': 'A', 'Б': 'B', 'В': 'V', 'Г': 'G', 'Д': 'D',
+            'Е': 'E', 'Ё': 'Yo', 'Ж': 'J', 'З': 'Z', 'И': 'I',
+            'Й': 'Y', 'К': 'K', 'Л': 'L', 'М': 'M', 'Н': 'N',
+            'О': 'O', 'П': 'P', 'Р': 'R', 'С': 'S', 'Т': 'T',
+            'У': 'U', 'Ф': 'F', 'Х': 'X', 'Ц': 'Ts', 'Ч': 'Ch',
+            'Ш': 'Sh', 'Щ': 'Shch', 'Ъ': '', 'Ы': 'I', 'Ь': '',
+            'Э': 'E', 'Ю': 'Yu', 'Я': 'Ya'
+        }
+        
+        result = ''
+        for char in text:
+            if char in translit_dict:
+                result += translit_dict[char]
+            else:
+                result += char
+        
+        return result
 
