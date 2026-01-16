@@ -54,7 +54,7 @@ TEMPLATES = [
 REST_FRAMEWORK = {
     # Default authentication methods (token yoki session)
     'DEFAULT_AUTHENTICATION_CLASSES': [
-        'rest_framework.authentication.SessionAuthentication',
+        # 'rest_framework.authentication.SessionAuthentication',
         'rest_framework.authentication.BasicAuthentication',
         # Agar JWT ishlatsangiz: 'rest_framework_simplejwt.authentication.JWTAuthentication',
     ],
