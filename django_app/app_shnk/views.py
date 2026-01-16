@@ -291,188 +291,58 @@ class ShnkGroupWithInformationAPIView(APIView):
         )
         return Response(serializer.data, status=status.HTTP_200_OK)
     
-
-
-class BulkShnkUploadAPIView(APIView):
+class ShnkBulkCreateAPIView(APIView):
     """
-    SHNK guruhlari va ma'lumotlarini ommaviy yuklash uchun API
+    Katta JSON orqali SHNK Group + SHNK Information yaratish
     """
-    
+
+    @transaction.atomic
     def post(self, request):
-        serializer = BulkShnkUploadSerializer(data=request.data)
-        
-        if serializer.is_valid():
-            try:
-                with transaction.atomic():
-                    shnk_groups_data = serializer.validated_data['shnk_groups']
-                    
-                    created_groups = []
-                    created_shnks = []
-                    updated_shnks = []
-                    
-                    for group_data in shnk_groups_data:
-                        # 1. Guruh ma'lumotlarini tahlil qilish
-                        title = group_data.get('title')
-                        
-                        # Agar title berilmagan bo'lsa, o'tkazib yuborish
-                        if not title:
-                            continue
-                        
-                        # Tilni aniqlash
-                        title_uz = ''
-                        title_ru = ''
-                        
-                        try:
-                            # Oddiy til aniqlash logikasi
-                            if self.is_cyrillic(title):
-                                title_ru = title
-                                title_uz = self.transliterate_cyrillic_to_latin(title)
-                            else:
-                                title_uz = title
-                                title_ru = ''
-                        except:
-                            # Agar til aniqlashda muammo bo'lsa, ikkala tilga ham bir xil qiymat
-                            title_uz = title
-                            title_ru = title
-                        
-                        # Guruhni yaratish yoki topish
-                        group, created = ShnkGroupInformation.objects.get_or_create(
-                            title_uz=title_uz,
-                            defaults={
-                                'title_ru': title_ru
-                            }
-                        )
-                        
-                        # Agar mavjud bo'lsa, yangilash
-                        if not created:
-                            if title_ru:
-                                group.title_ru = title_ru
-                                group.save()
-                        
-                        if created:
-                            created_groups.append(title_uz)
-                        
-                        # 2. SHNK ma'lumotlarini qayta ishlash
-                        shnk_information_data = group_data.get('shnk_information', [])
-                        
-                        for shnk_data in shnk_information_data:
-                            designation = shnk_data.get('designation', '')
-                            
-                            if not designation:
-                                continue
-                            
-                            name = shnk_data.get('name', '')
-                            change = shnk_data.get('change', '')
-                            order = shnk_data.get('order', 0)
-                            
-                            # Tilni aniqlash name uchun
-                            name_uz = ''
-                            name_ru = ''
-                            
-                            try:
-                                if self.is_cyrillic(name):
-                                    name_ru = name
-                                    # Ruscha matnni lotin (o'zbek) tiliga o'girish
-                                    name_uz = self.transliterate_cyrillic_to_latin(name)
-                                else:
-                                    name_uz = name
-                                    name_ru = ''
-                            except:
-                                name_uz = name
-                                name_ru = name
-                            
-                            # SHNK yaratish yoki yangilash
-                            shnk, shnk_created = ShnkInformation.objects.get_or_create(
-                                shnkgroup=group,
-                                designation=designation,
-                                defaults={
-                                    'name_uz': name_uz,
-                                    'name_ru': name_ru,
-                                    'change': change,
-                                    'order': order,
-                                    'status': True
-                                }
-                            )
-                            
-                            if shnk_created:
-                                created_shnks.append(designation)
-                            else:
-                                # Yangilash
-                                shnk.name_uz = name_uz
-                                shnk.name_ru = name_ru
-                                shnk.change = change
-                                shnk.order = order
-                                shnk.save()
-                                updated_shnks.append(designation)
-                    
-                    response_data = {
-                        'success': True,
-                        'message': 'Ma\'lumotlar muvaffaqiyatli saqlandi',
-                        'created_groups': created_groups,
-                        'created_shnks': created_shnks,
-                        'updated_shnks': updated_shnks,
-                        'total_groups_processed': len(shnk_groups_data),
-                        'total_shnks_processed': sum(len(g.get('shnk_information', [])) for g in shnk_groups_data)
-                    }
-                    
-                    return Response(response_data, status=status.HTTP_201_CREATED)
-                    
-            except Exception as e:
-                return Response({
-                    'success': False,
-                    'error': str(e),
-                    'message': 'Ma\'lumotlarni saqlashda xatolik yuz berdi'
-                }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-        
-        return Response({
-            'success': False,
-            'errors': serializer.errors,
-            'message': 'Yuborilgan ma\'lumotlar noto\'g\'ri formatda'
-        }, status=status.HTTP_400_BAD_REQUEST)
-    
-    def is_cyrillic(self, text):
-        """Matn kiril alifbosida yozilganligini tekshirish"""
-        if not text:
-            return False
-        
-        # Kiril harflari
-        cyrillic_pattern = re.compile(r'[а-яА-ЯёЁ]')
-        
-        # Agar matnning kamida 30% kiril harflaridan iborat bo'lsa, ruscha deb hisoblaymiz
-        cyrillic_count = len(cyrillic_pattern.findall(text))
-        total_letters = len([c for c in text if c.isalpha()])
-        
-        if total_letters == 0:
-            return False
-        
-        return (cyrillic_count / total_letters) > 0.3
-    
-    def transliterate_cyrillic_to_latin(self, text):
-        """Kiril matnini lotin (o'zbek) alifbosiga o'girish"""
-        # Soddalashtirilgan transliteratsiya
-        translit_dict = {
-            'а': 'a', 'б': 'b', 'в': 'v', 'г': 'g', 'д': 'd',
-            'е': 'e', 'ё': 'yo', 'ж': 'j', 'з': 'z', 'и': 'i',
-            'й': 'y', 'к': 'k', 'л': 'l', 'м': 'm', 'н': 'n',
-            'о': 'o', 'п': 'p', 'р': 'r', 'с': 's', 'т': 't',
-            'у': 'u', 'ф': 'f', 'х': 'x', 'ц': 'ts', 'ч': 'ch',
-            'ш': 'sh', 'щ': 'shch', 'ъ': '', 'ы': 'i', 'ь': '',
-            'э': 'e', 'ю': 'yu', 'я': 'ya',
-            'А': 'A', 'Б': 'B', 'В': 'V', 'Г': 'G', 'Д': 'D',
-            'Е': 'E', 'Ё': 'Yo', 'Ж': 'J', 'З': 'Z', 'И': 'I',
-            'Й': 'Y', 'К': 'K', 'Л': 'L', 'М': 'M', 'Н': 'N',
-            'О': 'O', 'П': 'P', 'Р': 'R', 'С': 'S', 'Т': 'T',
-            'У': 'U', 'Ф': 'F', 'Х': 'X', 'Ц': 'Ts', 'Ч': 'Ch',
-            'Ш': 'Sh', 'Щ': 'Shch', 'Ъ': '', 'Ы': 'I', 'Ь': '',
-            'Э': 'E', 'Ю': 'Yu', 'Я': 'Ya'
-        }
-        
-        result = ''
-        for char in text:
-            if char in translit_dict:
-                result += translit_dict[char]
-            else:
-                result += char
-        
-        return result
+        data = request.data.get("shnk_groups", [])
 
+        if not data:
+            return Response(
+                {"error": "shnk_groups bo‘sh"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        created_groups = []
+
+        for group in data:
+            # 1️⃣ GROUP yaratish
+            shnk_group = ShnkGroupInformation.objects.create(
+                title_uz=group.get("title_uz"),
+                title_ru=group.get("title_ru"),
+            )
+
+            # 2️⃣ SHNK INFORMATION lar
+            informations = group.get("shnk_information", [])
+
+            for item in informations:
+                ShnkInformation.objects.create(
+                    shnkgroup=shnk_group,
+
+                    name_uz=item.get("name_uz"),
+                    name_ru=item.get("name_ru"),
+
+                    designation_uz=item.get("designation_uz"),
+                    designation_ru=item.get("designation_ru"),
+
+                    order=item.get("order", 0),
+                    status=True
+                )
+
+            created_groups.append({
+                "id": shnk_group.id,
+                "title_uz": shnk_group.title_uz,
+                "title_ru": shnk_group.title_ru,
+                "count": len(informations)
+            })
+
+        return Response(
+            {
+                "success": True,
+                "created_groups": created_groups
+            },
+            status=status.HTTP_201_CREATED
+        )
