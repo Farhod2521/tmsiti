@@ -228,7 +228,7 @@ class ShnkGroupInformation(models.Model):
         return self.title
     
 class ShnkInformation(models.Model):
-    shnkgroup = models.ForeignKey(ShnkGroup, on_delete=models.CASCADE, db_index=True)
+    shnkgroup = models.ForeignKey(ShnkGroupInformation, on_delete=models.CASCADE, db_index=True)
     name = models.CharField(max_length=500, verbose_name="Nomi", db_index=True)
     designation = models.CharField(max_length=100, verbose_name="Belgilanishi", db_index=True)
     change = models.CharField(max_length=100, verbose_name="O'zgargani",blank=True, null=True)
