@@ -2,9 +2,10 @@
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
-from .models import Texnik_reglaament, Standard, ShnkGroupInformation, Quiz, Customer
-from .serializers import TexnikReglaamentSerializer, StandardSerializer, ShnkGroupInformation, ShnkGroupInformationSerializer
+from .models import Texnik_reglaament, Standard, ShnkGroupInformation, Quiz, Customer, ShnkInformation
+from .serializers import TexnikReglaamentSerializer, StandardSerializer, ShnkGroupInformation, ShnkGroupInformationSerializer, BulkShnkUploadSerializer
 from django.views.decorators.csrf import csrf_exempt
+from django.db import transaction
 from django.utils.decorators import method_decorator
 from rest_framework.permissions import AllowAny
 from django.core.cache import cache
@@ -289,3 +290,111 @@ class ShnkGroupWithInformationAPIView(APIView):
             many=True
         )
         return Response(serializer.data, status=status.HTTP_200_OK)
+    
+
+
+class BulkShnkUploadAPIView(APIView):
+    """
+    SHNK guruhlari va ma'lumotlarini ommaviy yuklash uchun API
+    Uzbek va Rus tillarida
+    """
+    
+    def post(self, request):
+        serializer = BulkShnkUploadSerializer(data=request.data)
+        
+        if serializer.is_valid():
+            try:
+                with transaction.atomic():
+                    shnk_groups_data = serializer.validated_data['shnk_groups']
+                    
+                    created_groups = []
+                    created_shnks = []
+                    updated_shnks = []
+                    
+                    for group_data in shnk_groups_data:
+                        # 1. Guruhni yaratish yoki topish
+                        title_uz = group_data.get('title_uz', '')
+                        title_ru = group_data.get('title_ru', '')
+                        
+                        # Agar title_uz bo'sh bo'lsa, sarlavha maydoni bo'lmaydi
+                        if not title_uz:
+                            continue
+                        
+                        # Guruhni qidirish yoki yaratish
+                        group, created = ShnkGroupInformation.objects.get_or_create(
+                            title_uz=title_uz,
+                            defaults={
+                                'title_ru': title_ru or title_uz
+                            }
+                        )
+                        
+                        # Agar mavjud bo'lsa, ruscha sarlavhani yangilash
+                        if not created and title_ru:
+                            group.title_ru = title_ru
+                            group.save()
+                        
+                        if created:
+                            created_groups.append(title_uz)
+                        
+                        # 2. Guruhga tegishli SHNK ma'lumotlarini yaratish
+                        shnk_information_data = group_data.get('shnk_information', [])
+                        
+                        for shnk_data in shnk_information_data:
+                            designation = shnk_data.get('designation', '')
+                            
+                            if not designation:
+                                continue
+                            
+                            # SHNK ma'lumotlarini yaratish yoki yangilash
+                            shnk, shnk_created = ShnkInformation.objects.get_or_create(
+                                shnkgroup=group,
+                                designation=designation,
+                                defaults={
+                                    'name_uz': shnk_data.get('name_uz', ''),
+                                    'name_ru': shnk_data.get('name_ru', ''),
+                                    'change': shnk_data.get('change', ''),
+                                    'order': shnk_data.get('order', 0),
+                                    'status': True
+                                }
+                            )
+                            
+                            if shnk_created:
+                                created_shnks.append(designation)
+                            else:
+                                # Agar mavjud bo'lsa, yangilash
+                                if 'name_uz' in shnk_data:
+                                    shnk.name_uz = shnk_data['name_uz']
+                                if 'name_ru' in shnk_data:
+                                    shnk.name_ru = shnk_data['name_ru']
+                                if 'change' in shnk_data:
+                                    shnk.change = shnk_data['change']
+                                if 'order' in shnk_data:
+                                    shnk.order = shnk_data['order']
+                                shnk.save()
+                                updated_shnks.append(designation)
+                    
+                    response_data = {
+                        'success': True,
+                        'message': 'Ma\'lumotlar muvaffaqiyatli saqlandi',
+                        'created_groups': created_groups,
+                        'created_shnks': created_shnks,
+                        'updated_shnks': updated_shnks,
+                        'total_groups_processed': len(shnk_groups_data),
+                        'total_shnks_processed': sum(len(g.get('shnk_information', [])) for g in shnk_groups_data)
+                    }
+                    
+                    return Response(response_data, status=status.HTTP_201_CREATED)
+                    
+            except Exception as e:
+                return Response({
+                    'success': False,
+                    'error': str(e),
+                    'message': 'Ma\'lumotlarni saqlashda xatolik yuz berdi'
+                }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+        return Response({
+            'success': False,
+            'errors': serializer.errors,
+            'message': 'Yuborilgan ma\'lumotlar noto\'g\'ri formatda'
+        }, status=status.HTTP_400_BAD_REQUEST)
+

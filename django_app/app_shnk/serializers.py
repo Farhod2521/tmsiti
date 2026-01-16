@@ -50,3 +50,30 @@ class ShnkGroupInformationSerializer(serializers.ModelSerializer):
         ).order_by('order')
 
         return ShnkInformationSerializer(queryset, many=True).data
+    
+
+
+class ShnkInformationCreateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ShnkInformation
+        fields = [
+            'name_uz',
+            'name_ru',
+            'designation',
+            'change',
+            'order'
+        ]
+
+class ShnkGroupInformationCreateSerializer(serializers.ModelSerializer):
+    shnk_information = ShnkInformationCreateSerializer(many=True, required=False)
+    
+    class Meta:
+        model = ShnkGroupInformation
+        fields = [
+            'title_uz',
+            'title_ru',
+            'shnk_information'
+        ]
+
+class BulkShnkUploadSerializer(serializers.Serializer):
+    shnk_groups = ShnkGroupInformationCreateSerializer(many=True)
