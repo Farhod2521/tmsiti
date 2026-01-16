@@ -290,22 +290,17 @@ class ShnkGroupWithInformationAPIView(APIView):
             many=True
         )
         return Response(serializer.data, status=status.HTTP_200_OK)
-from rest_framework.parsers import JSONParser
+    
 @method_decorator(csrf_exempt, name='dispatch')
 class ShnkBulkCreateAPIView(APIView):
-    parser_classes = [JSONParser]
 
     @transaction.atomic
     def post(self, request):
-        print(request.data)  # tekshiruv
-        data = request.data.get("shnk_groups")
+        data = request.data.get("shnk_groups", [])
 
-        if not isinstance(data, list):
+        if not data:
             return Response(
-                {
-                    "error": "shnk_groups list bo‘lishi kerak",
-                    "received": request.data
-                },
+                {"error": "shnk_groups bo‘sh"},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
