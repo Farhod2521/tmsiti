@@ -291,10 +291,8 @@ class ShnkGroupWithInformationAPIView(APIView):
         )
         return Response(serializer.data, status=status.HTTP_200_OK)
     
+@method_decorator(csrf_exempt, name='dispatch')
 class ShnkBulkCreateAPIView(APIView):
-    """
-    Katta JSON orqali SHNK Group + SHNK Information yaratish
-    """
 
     @transaction.atomic
     def post(self, request):
@@ -306,43 +304,20 @@ class ShnkBulkCreateAPIView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        created_groups = []
-
         for group in data:
-            # 1️⃣ GROUP yaratish
             shnk_group = ShnkGroupInformation.objects.create(
                 title_uz=group.get("title_uz"),
                 title_ru=group.get("title_ru"),
             )
 
-            # 2️⃣ SHNK INFORMATION lar
-            informations = group.get("shnk_information", [])
-
-            for item in informations:
+            for item in group.get("shnk_information", []):
                 ShnkInformation.objects.create(
                     shnkgroup=shnk_group,
-
                     name_uz=item.get("name_uz"),
                     name_ru=item.get("name_ru"),
-
                     designation_uz=item.get("designation_uz"),
                     designation_ru=item.get("designation_ru"),
-
                     order=item.get("order", 0),
-                    status=True
                 )
 
-            created_groups.append({
-                "id": shnk_group.id,
-                "title_uz": shnk_group.title_uz,
-                "title_ru": shnk_group.title_ru,
-                "count": len(informations)
-            })
-
-        return Response(
-            {
-                "success": True,
-                "created_groups": created_groups
-            },
-            status=status.HTTP_201_CREATED
-        )
+        return Response({"success": True}, status=status.HTTP_201_CREATED)
