@@ -3,7 +3,7 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from .models import Texnik_reglaament, Standard, ShnkGroupInformation, Quiz, Customer, ShnkInformation
-from .serializers import TexnikReglaamentSerializer, StandardSerializer, ShnkGroupInformation, ShnkGroupInformationSerializer, BulkShnkUploadSerializer
+from .serializers import TexnikReglaamentSerializer, StandardSerializer, ShnkGroupInformation, ShnkGroupInformationSerializer
 from django.views.decorators.csrf import csrf_exempt
 from django.db import transaction
 from django.utils.decorators import method_decorator
