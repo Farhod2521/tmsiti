@@ -290,34 +290,112 @@ class ShnkGroupWithInformationAPIView(APIView):
             many=True
         )
         return Response(serializer.data, status=status.HTTP_200_OK)
-    
-@method_decorator(csrf_exempt, name='dispatch')
-class ShnkBulkCreateAPIView(APIView):
-
-    @transaction.atomic
+import json
+from django.db import transaction
+from django.http import JsonResponse 
+class ShnkDataImportAPIView(APIView):
     def post(self, request):
-        data = request.data.get("shnk_groups", [])
-
-        if not data:
-            return Response(
-                {"error": "shnk_groups bo‘sh"},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        for group in data:
-            shnk_group = ShnkGroupInformation.objects.create(
-                title_uz=group.get("title_uz"),
-                title_ru=group.get("title_ru"),
-            )
-
-            for item in group.get("shnk_information", []):
-                ShnkInformation.objects.create(
-                    shnkgroup=shnk_group,
-                    name_uz=item.get("name_uz"),
-                    name_ru=item.get("name_ru"),
-                    designation_uz=item.get("designation_uz"),
-                    designation_ru=item.get("designation_ru"),
-                    order=item.get("order", 0),
+        try:
+            # JSON ma'lumotlarini olish
+            data = request.data
+            
+            # Agar JSON string sifatida kelsa
+            if isinstance(data, str):
+                data = json.loads(data)
+            
+            # Ma'lumotlarni saqlash
+            success_count = self.save_shnk_data(data)
+            
+            return JsonResponse({
+                'success': True,
+                'message': f'Muvaffaqiyatli saqlandi. {success_count} ta guruh va uning SHNKlari yaratildi/yangilandi.',
+                'total_groups': len(data.get('shnk_groups', []))
+            }, status=status.HTTP_201_CREATED)
+            
+        except json.JSONDecodeError as e:
+            return JsonResponse({
+                'success': False,
+                'error': f'JSON formatida xatolik: {str(e)}'
+            }, status=status.HTTP_400_BAD_REQUEST)
+            
+        except Exception as e:
+            return JsonResponse({
+                'success': False,
+                'error': f'Server xatosi: {str(e)}'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    def save_shnk_data(self, data):
+        """JSON ma'lumotlarini ma'lumotlar bazasiga saqlash"""
+        
+        success_count = 0
+        
+        # Atomik operatsiya - agar bitta xatolik bo'lsa, barchasini bekor qilish
+        with transaction.atomic():
+            shnk_groups = data.get('shnk_groups', [])
+            
+            for group_data in shnk_groups:
+                # Guruh ma'lumotlarini olish
+                title_uz = group_data.get('title_uz', '')
+                title_ru = group_data.get('title_ru', '')
+                
+                if not title_uz and not title_ru:
+                    continue  # Agar sarlavha bo'lmasa, o'tkazib yuborish
+                
+                # Guruhni yaratish yoki yangilash
+                group, created = ShnkGroupInformation.objects.update_or_create(
+                    title=title_uz,  # Asosiy til uchun
+                    defaults={}
                 )
-
-        return Response({"success": True}, status=status.HTTP_201_CREATED)
+                
+                # Tarjimalarni saqlash
+                if hasattr(group, 'title_uz'):
+                    group.title_uz = title_uz
+                if hasattr(group, 'title_ru'):
+                    group.title_ru = title_ru
+                
+                group.save()
+                
+                # Guruh ichidagi SHNK ma'lumotlarini saqlash
+                shnk_items = group_data.get('shnk_information', [])
+                for shnk_data in shnk_items:
+                    self.save_shnk_item(group, shnk_data)
+                
+                success_count += 1
+        
+        return success_count
+    
+    def save_shnk_item(self, group, shnk_data):
+        """Bitta SHNK elementini saqlash"""
+        
+        # SHNK ma'lumotlarini olish
+        name_uz = shnk_data.get('name_uz', '')
+        name_ru = shnk_data.get('name_ru', '')
+        designation_uz = shnk_data.get('designation_uz', '')
+        designation_ru = shnk_data.get('designation_ru', '')
+        order = shnk_data.get('order', 0)
+        
+        if not name_uz and not name_ru:
+            return  # Agar nom bo'lmasa, o'tkazib yuborish
+        
+        # SHNKni yaratish yoki yangilash
+        # Belgilanishi (designation) bo'yicha qidirish
+        shnk_item, created = ShnkInformation.objects.update_or_create(
+            shnkgroup=group,
+            designation=designation_uz,  # Asosiy til uchun
+            defaults={
+                'name': name_uz,
+                'order': order,
+            }
+        )
+        
+        # Tarjimalarni saqlash
+        if hasattr(shnk_item, 'name_uz'):
+            shnk_item.name_uz = name_uz
+        if hasattr(shnk_item, 'name_ru'):
+            shnk_item.name_ru = name_ru
+        if hasattr(shnk_item, 'designation_uz'):
+            shnk_item.designation_uz = designation_uz
+        if hasattr(shnk_item, 'designation_ru'):
+            shnk_item.designation_ru = designation_ru
+        
+        shnk_item.save()
