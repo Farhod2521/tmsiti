@@ -1,13 +1,20 @@
-from django.shortcuts import render
 
-# Create your views here.
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
-from .models import Texnik_reglaament, Standard
-from .serializers import TexnikReglaamentSerializer, StandardSerializer
-
-
+from .models import Texnik_reglaament, Standard, ShnkGroupInformation, Quiz, Customer
+from .serializers import TexnikReglaamentSerializer, StandardSerializer, ShnkGroupInformation, ShnkGroupInformationSerializer
+from django.views.decorators.csrf import csrf_exempt
+from django.utils.decorators import method_decorator
+from rest_framework.permissions import AllowAny
+from django.core.cache import cache
+from concurrent.futures import ThreadPoolExecutor
+import hashlib
+import threading
+from PIL import Image
+import io
+from pdf2image import convert_from_path
+import os
 import base64
 from io import BytesIO
 from pdf2image import convert_from_path
@@ -19,14 +26,7 @@ class TexnikReglaamentListAPIView(APIView):
         return Response(serializer.data, status=status.HTTP_200_OK)  
     
 
-from django.core.cache import cache
-from concurrent.futures import ThreadPoolExecutor
-import hashlib
-import threading
-from PIL import Image
-import io
-from pdf2image import convert_from_path
-import os
+
 
 class StandardPdfToImagesAPIView(APIView):
     """
@@ -240,7 +240,6 @@ class StandardListAPIView(APIView):
 
 
 
-from .models import  Quiz, Customer
 
 
 class QuizListAPIView(APIView):
@@ -257,9 +256,7 @@ class QuizListAPIView(APIView):
 
         return Response(data, status=status.HTTP_200_OK)
     
-from django.views.decorators.csrf import csrf_exempt
-from django.utils.decorators import method_decorator
-from rest_framework.permissions import AllowAny
+
 @method_decorator(csrf_exempt, name='dispatch')
 class CustomerCreateAPIView(APIView):
     authentication_classes = []   # 🔥 MUHIM
@@ -280,3 +277,15 @@ class CustomerCreateAPIView(APIView):
             {"message": "Customer yaratildi", "id": customer.id},
             status=status.HTTP_201_CREATED
         )
+    
+
+
+class ShnkGroupWithInformationAPIView(APIView):
+    def get(self, request):
+        queryset = ShnkGroupInformation.objects.all().order_by('id')
+
+        serializer = ShnkGroupInformationSerializer(
+            queryset,
+            many=True
+        )
+        return Response(serializer.data, status=status.HTTP_200_OK)

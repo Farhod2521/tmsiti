@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Subsystem, ShnkGroup, Shnk, Qurilish_reglaament, Malumotnoma, SREN, SREN_SHNQ, Texnik_reglaament, Standard
+from .models import Subsystem, ShnkGroup, Shnk, Qurilish_reglaament, Malumotnoma, SREN, SREN_SHNQ, Texnik_reglaament, Standard, ShnkGroupInformation, ShnkInformation
 from modeltranslation.admin import TranslationAdmin, TabbedTranslationAdmin
 from import_export.admin import  ImportExportModelAdmin
 
@@ -137,3 +137,50 @@ class CustomerAdmin(ImportExportModelAdmin):
     ordering = ("-create_date",)
 
     readonly_fields = ("create_date",)
+
+
+
+@admin.register(ShnkGroupInformation)
+class ShnkGroupInformationAdmin(TranslationAdmin):
+    list_display = ('id', 'title')
+    search_fields = ('title',)
+    ordering = ('id',)
+
+
+@admin.register(ShnkInformation)
+class ShnkInformationAdmin(TranslationAdmin):
+    list_display = (
+        'id',
+        'name',
+        'designation',
+        'order',
+        'status',
+    )
+    list_filter = ('status',)
+    search_fields = ('name', 'designation')
+    ordering = ('order',)
+
+    fieldsets = (
+        ("Asosiy maʼlumotlar", {
+            'fields': (
+                'shnkgroup',
+                'name_uz',
+                'name_ru',
+                'designation',
+                'change',
+            )
+        }),
+        ("Fayllar", {
+            'fields': (
+                'pdf_uz',
+                'pdf_ru',
+                'url',
+            )
+        }),
+        ("Sozlamalar", {
+            'fields': (
+                'order',
+                'status',
+            )
+        }),
+    )

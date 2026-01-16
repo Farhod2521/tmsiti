@@ -1,6 +1,20 @@
 from modeltranslation.translator import translator, TranslationOptions
-from .models import Shnk, Qurilish_reglaament, Malumotnoma, Subsystem, ShnkGroup, SREN, SREN_SHNQ, Texnik_reglaament, Standard
+from .models import (
+        Shnk, Qurilish_reglaament, Malumotnoma, 
+        Subsystem, ShnkGroup, SREN, SREN_SHNQ, 
+        Texnik_reglaament, Standard, ShnkGroupInformation, ShnkInformation
+)
 
+
+
+class ShnkGroupInformationTranslationOptions(TranslationOptions):
+    fields = ('title',)
+translator.register(ShnkGroupInformation, ShnkGroupInformationTranslationOptions)
+
+
+class ShnkInformationTranslationOptions(TranslationOptions):
+    fields = ('name',)
+translator.register(ShnkInformation, ShnkInformationTranslationOptions)
 
 class StandardTranslationOptions(TranslationOptions):
     fields = ('title', 'designation')
