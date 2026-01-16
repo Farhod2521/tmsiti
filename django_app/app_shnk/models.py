@@ -222,7 +222,6 @@ class ShnkGroupInformation(models.Model):
         verbose_name_plural = "Guruhlar Malumotnomalar"
         indexes = [
             models.Index(fields=["title"]),  
-            models.Index(fields=["subsystem"]),  
         ]
 
     def __str__(self):
