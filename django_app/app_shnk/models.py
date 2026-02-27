@@ -1,5 +1,5 @@
 from django.db import models
-
+from django.db.models import F
 
 class Subsystem(models.Model):
     title = models.CharField(max_length=500, verbose_name="Quyi tizim", db_index=True)
