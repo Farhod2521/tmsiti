@@ -121,12 +121,39 @@ class SREN(models.Model):
     designation = models.CharField(max_length=100, verbose_name="Belgilanishi", db_index=True)
     pdf_uz = models.FileField(upload_to="FILES/shnk", blank=True, null=True)
     pdf_ru = models.FileField(upload_to="FILES/shnk", blank=True, null=True)
-    order = models.PositiveIntegerField(default=0, verbose_name="Tartib raqami")  # ✅ Tartib
+    order = models.PositiveIntegerField(default=0, verbose_name="Tartib raqami")
 
     class Meta:
         db_table = "sren"
         verbose_name = "SREN"
         verbose_name_plural = "SREN"
+        ordering = ["order"]  # ✅ adminda tartib bilan chiqadi
+
+    def save(self, *args, **kwargs):
+        is_new = self.pk is None
+
+        if is_new:
+            # yangi qo‘shilganda joy ochamiz
+            SREN.objects.filter(order__gte=self.order).update(order=F("order") + 1)
+        else:
+            old_order = SREN.objects.get(pk=self.pk).order
+
+            if self.order < old_order:
+                SREN.objects.filter(
+                    order__gte=self.order,
+                    order__lt=old_order
+                ).exclude(pk=self.pk).update(order=F("order") + 1)
+
+            elif self.order > old_order:
+                SREN.objects.filter(
+                    order__lte=self.order,
+                    order__gt=old_order
+                ).exclude(pk=self.pk).update(order=F("order") - 1)
+
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return self.name
 
 class  SREN_SHNQ(models.Model):
     sren = models.ForeignKey(SREN, on_delete=models.CASCADE)
