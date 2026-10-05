@@ -27,3 +27,5 @@ starlette==0.46.1
 typing_extensions==4.12.2
 tzdata==2025.1
 uvicorn==0.34.0
+python-docx>=1.1.2
+lxml>=5.0

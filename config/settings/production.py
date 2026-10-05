@@ -9,6 +9,8 @@ ALLOWED_HOSTS = ['*']
 
 load_dotenv()  # <-- BU QATORNI TEKSHIRING!
 
+SHNQ_ADMIN_PASSWORD = os.getenv('SHNQ_ADMIN_PASSWORD', SHNQ_ADMIN_PASSWORD)
+
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.mysql',

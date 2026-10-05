@@ -1,5 +1,6 @@
-from django.contrib import admin
-from .models import Subsystem, ShnkGroup, Shnk, Qurilish_reglaament, Malumotnoma, SREN, SREN_SHNQ, Texnik_reglaament, Standard, ShnkGroupInformation, ShnkInformation
+from django.contrib import admin, messages
+from .models import Subsystem, ShnkGroup, Shnk, Qurilish_reglaament, Malumotnoma, SREN, SREN_SHNQ, Texnik_reglaament, Standard, ShnkGroupInformation, ShnkInformation, ShnkEdition
+from .shnq_docs import process_edition, rebuild_chain
 from modeltranslation.admin import TranslationAdmin, TabbedTranslationAdmin
 from import_export.admin import  ImportExportModelAdmin
 
@@ -138,6 +139,49 @@ class CustomerAdmin(ImportExportModelAdmin):
 
     readonly_fields = ("create_date",)
 
+
+
+@admin.register(ShnkEdition)
+class ShnkEditionAdmin(admin.ModelAdmin):
+    """Django admin orqali ham .docx yuklash mumkin — saqlanganda matn avtomatik ajratiladi."""
+    list_display = ("id", "shnk", "lang", "edition_date", "note", "blocks_count", "parse_error")
+    list_filter = ("lang",)
+    search_fields = ("shnk__designation", "shnk__name_uz", "note")
+    autocomplete_fields = ("shnk",)
+    fields = ("shnk", "lang", "edition_date", "note", "source_file", "parse_error")
+    readonly_fields = ("parse_error",)
+
+    @admin.display(description="Bloklar")
+    def blocks_count(self, obj):
+        return (obj.stats or {}).get("blocks", 0)
+
+    def save_model(self, request, obj, form, change):
+        old = ShnkEdition.objects.filter(pk=obj.pk).values("shnk_id", "lang").first() if change else None
+        super().save_model(request, obj, form, change)
+        if not change or "source_file" in form.changed_data:
+            try:
+                process_edition(obj)
+            except ValueError as exc:
+                obj.parse_error = str(exc)
+                obj.save(update_fields=["parse_error"])
+                messages.error(request, f"Faylni o'qib bo'lmadi: {exc}")
+        rebuild_chain(obj.shnk_id, obj.lang)
+        if old and (old["shnk_id"], old["lang"]) != (obj.shnk_id, obj.lang):
+            rebuild_chain(old["shnk_id"], old["lang"])
+
+    def delete_model(self, request, obj):
+        shnk_id, lang = obj.shnk_id, obj.lang
+        obj.source_file.delete(save=False)
+        super().delete_model(request, obj)
+        rebuild_chain(shnk_id, lang)
+
+    def delete_queryset(self, request, queryset):
+        chains = set(queryset.values_list("shnk_id", "lang"))
+        for obj in queryset:
+            obj.source_file.delete(save=False)
+        super().delete_queryset(request, queryset)
+        for shnk_id, lang in chains:
+            rebuild_chain(shnk_id, lang)
 
 
 @admin.register(ShnkGroupInformation)

@@ -72,6 +72,8 @@ REST_FRAMEWORK = {
 }
 WSGI_APPLICATION = 'config.wsgi.application'
 CORS_ALLOW_ALL_ORIGINS = True
+from corsheaders.defaults import default_headers
+CORS_ALLOW_HEADERS = (*default_headers, "x-admin-token")
 AUTH_PASSWORD_VALIDATORS = [
     {
         'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator',
@@ -115,4 +117,7 @@ STATICFILES_DIRS = [
 # Media files
 MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+
+# tmsiti.uz/admin dashboard (SHNQ yuklash) paroli. Serverda .env orqali almashtirish mumkin.
+SHNQ_ADMIN_PASSWORD = os.getenv('SHNQ_ADMIN_PASSWORD', '1212')
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'

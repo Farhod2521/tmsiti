@@ -2,6 +2,7 @@ from pydantic import BaseModel
 from typing import List, Optional
 
 class ShnkSchema(BaseModel):
+    id: Optional[int] = None
     name_uz: Optional[str]
     name_ru: Optional[str]
     designation: str

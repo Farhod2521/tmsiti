@@ -22,6 +22,7 @@ async def get_subsystems(db: AsyncSession):
                     title=group.title,
                     documents=[
                         ShnkSchema(
+                            id=shnk.id,
                             name_uz=shnk.name_uz,
                             name_ru=shnk.name_ru,
                             designation=shnk.designation,
@@ -59,6 +60,7 @@ async def get_subsystems_false(db: AsyncSession):
                     title=group.title,
                     documents=[
                         ShnkSchema(
+                            id=shnk.id,
                             name_uz=shnk.name_uz,
                             name_ru=shnk.name_ru,
                             designation=shnk.designation,

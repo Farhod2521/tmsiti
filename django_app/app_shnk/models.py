@@ -78,6 +78,55 @@ class Shnk(models.Model):
         return self.name
 
 
+def shnq_edition_upload_to(instance, filename):
+    return f"FILES/shnq_editions/{instance.shnk_id}/{filename}"
+
+
+class ShnkEdition(models.Model):
+    """
+    SHNQ hujjatining bitta tahriri (lex.uz dagi kabi).
+    Admin .docx yuklaydi -> matn bloklarga ajratiladi -> oldingi tahrir bilan
+    solishtirilib, o'zgargan bandlarga "Oldingi tahrirga qarang" qo'shiladi.
+    """
+    LANG_CHOICES = (("uz", "O'zbekcha"), ("ru", "Русский"))
+
+    shnk = models.ForeignKey(Shnk, on_delete=models.CASCADE, related_name="editions", verbose_name="SHNQ")
+    lang = models.CharField(max_length=2, choices=LANG_CHOICES, default="uz", verbose_name="Til")
+    source_file = models.FileField(upload_to=shnq_edition_upload_to, verbose_name="Fayl (lex.uz .doc yoki Word .docx)")
+    edition_date = models.DateField(verbose_name="Tahrir sanasi")
+    note = models.CharField(
+        max_length=1000, blank=True, default="",
+        verbose_name="O'zgartirish kiritgan hujjat",
+        help_text="Masalan: Qurilish vazirining 2025-yil 24-iyundagi 01/2-37-son buyrug'i (hisob raqami 358)",
+    )
+    raw_blocks = models.JSONField(default=list, blank=True, editable=False)
+    blocks = models.JSONField(default=list, blank=True, editable=False)
+    toc = models.JSONField(default=list, blank=True, editable=False)
+    stats = models.JSONField(default=dict, blank=True, editable=False)
+    parse_error = models.TextField(blank=True, default="", editable=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "shnq_editions"
+        verbose_name = "SHNQ tahriri"
+        verbose_name_plural = "SHNQ tahrirlari (matn)"
+        ordering = ["shnk", "lang", "edition_date", "id"]
+
+    def __str__(self):
+        return f"{self.shnk.designation} [{self.lang}] {self.edition_date}"
+
+
+class ShnkCounter(models.Model):
+    shnk = models.OneToOneField(Shnk, on_delete=models.CASCADE, related_name="counter")
+    views = models.PositiveIntegerField(default=0)
+    downloads = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        db_table = "shnq_counters"
+        verbose_name = "SHNQ statistikasi"
+        verbose_name_plural = "SHNQ statistikasi"
+
 
 class Qurilish_reglaament(models.Model):
     group    =  models.CharField(max_length=500, verbose_name="Guruhi")
