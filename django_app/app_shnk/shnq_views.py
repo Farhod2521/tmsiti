@@ -3,6 +3,8 @@ SHNQ hujjatlarini lex.uz ko'rinishida ochish va ularni yuklash (admin dashboard)
 
 Public:
     GET  /api/shnq/<id>/?lang=uz&edition=<eid>   hujjat + tanlangan tahrir matni
+         lang: uz (lotin) | kr (kirill) | ru.  ?prefer=ru,kr,uz — lang berilmasa,
+         ro'yxatdagi birinchi mavjud til ochiladi (sayt tiliga qarab)
     POST /api/shnq/<id>/download/                yuklab olishlar sonini oshirish
 
 Admin (X-Admin-Token sarlavhasi bilan):
@@ -10,6 +12,7 @@ Admin (X-Admin-Token sarlavhasi bilan):
     GET    /api/shnq-admin/documents/?search=&page=     SHNQ lar ro'yxati
     GET    /api/shnq-admin/documents/<id>/              SHNQ + tahrirlari
     POST   /api/shnq-admin/documents/<id>/editions/     yangi tahrir (multipart: file, lang, edition_date, note)
+                                                        lang=auto (yoki bo'sh) — til matndan aniqlanadi
     PATCH  /api/shnq-admin/editions/<eid>/              sana / izoh / til / faylni o'zgartirish
     DELETE /api/shnq-admin/editions/<eid>/              tahrirni o'chirish
     POST   /api/shnq-admin/editions/<eid>/reparse/      faylni qayta o'qish
@@ -31,7 +34,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from .models import Shnk, ShnkCounter, ShnkEdition
-from .shnq_docs import ALLOWED_EXTENSIONS, process_edition, rebuild_chain
+from .shnq_docs import ALLOWED_EXTENSIONS, LANG_CODES, process_edition, rebuild_chain, resolve_lang
 
 TOKEN_SALT = "shnq-admin"
 TOKEN_MAX_AGE = 60 * 60 * 12  # 12 soat
@@ -83,7 +86,7 @@ def _file_name(field):
 
 
 def _lang(value, default="uz"):
-    return value if value in ("uz", "ru") else default
+    return value if value in LANG_CODES else default
 
 
 def _shnk_brief(shnk):
@@ -132,7 +135,11 @@ def _editions_light(shnk):
 class ShnqDocumentAPIView(PublicAPIView):
     def get(self, request, pk):
         shnk = get_object_or_404(Shnk.objects.select_related("shnkgroup__subsystem"), pk=pk)
-        lang = _lang(request.GET.get("lang"))
+        lang = request.GET.get("lang")
+        if lang not in LANG_CODES:
+            lang = None
+        prefer = [l for l in (request.GET.get("prefer") or "").split(",") if l in LANG_CODES]
+        prefer += [l for l in LANG_CODES if l not in prefer]
 
         editions = [e for e in _editions_light(shnk) if not e.parse_error and (e.stats or {}).get("blocks")]
         chosen = None
@@ -140,8 +147,9 @@ class ShnqDocumentAPIView(PublicAPIView):
         if edition_id and edition_id.isdigit():
             chosen = next((e for e in editions if e.id == int(edition_id)), None)
         if chosen is None:
-            same_lang = [e for e in editions if e.lang == lang]
-            pool = same_lang or editions
+            available = {e.lang for e in editions}
+            target = lang if lang in available else next((l for l in prefer if l in available), None)
+            pool = [e for e in editions if e.lang == target]
             chosen = pool[-1] if pool else None
 
         content = None
@@ -169,7 +177,7 @@ class ShnqDocumentAPIView(PublicAPIView):
         data.update({
             "views": counter.views + 1,
             "downloads": counter.downloads,
-            "languages": sorted({e.lang for e in editions}),
+            "languages": [l for l in LANG_CODES if any(e.lang == l for e in editions)],
             "editions": [_edition_brief(e) for e in editions],
             "content": content,
             "related": related,
@@ -232,7 +240,12 @@ class ShnqAdminDocumentListAPIView(AdminAPIView):
         except ValueError:
             page, page_size = 1, 30
         total = qs.count()
-        items = qs[(page - 1) * page_size: page * page_size]
+        items = list(qs[(page - 1) * page_size: page * page_size])
+        langs = {}
+        for shnk_id, lang in (
+            ShnkEdition.objects.filter(shnk_id__in=[s.id for s in items]).values_list("shnk_id", "lang").distinct()
+        ):
+            langs.setdefault(shnk_id, set()).add(lang)
 
         summary = {
             "documents": Shnk.objects.count(),
@@ -255,6 +268,7 @@ class ShnqAdminDocumentListAPIView(AdminAPIView):
                     "group": s.shnkgroup.title_uz if s.shnkgroup else None,
                     "pdf": bool(s.pdf_uz or s.pdf_ru),
                     "editions_count": s.editions_count,
+                    "languages": [l for l in LANG_CODES if l in langs.get(s.id, ())],
                     "last_edition": s.last_edition.isoformat() if s.last_edition else None,
                 }
                 for s in items
@@ -301,23 +315,28 @@ class ShnqAdminEditionCreateAPIView(AdminAPIView):
         if edition_date is None:
             return Response({"detail": "Tahrir sanasini kiriting (YYYY-MM-DD)"}, status=status.HTTP_400_BAD_REQUEST)
 
+        chosen_lang = request.data.get("lang") or "auto"
         edition = ShnkEdition.objects.create(
             shnk=shnk,
-            lang=_lang(request.data.get("lang")),
+            lang=_lang(chosen_lang),
             edition_date=edition_date,
             note=(request.data.get("note") or "").strip()[:1000],
             source_file=upload,
         )
         try:
-            process_edition(edition)
+            raw = process_edition(edition)
         except ValueError as exc:
             edition.source_file.delete(save=False)
             edition.delete()
             return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
 
+        edition.lang = resolve_lang(chosen_lang, raw)
+        edition.save(update_fields=["lang", "updated_at"])
         rebuild_chain(shnk.id, edition.lang)
         edition.refresh_from_db()
-        return Response(_edition_brief(edition), status=status.HTTP_201_CREATED)
+        data = _edition_brief(edition)
+        data["lang_corrected"] = chosen_lang in LANG_CODES and chosen_lang != edition.lang
+        return Response(data, status=status.HTTP_201_CREATED)
 
 
 class ShnqAdminEditionAPIView(AdminAPIView):
@@ -352,12 +371,14 @@ class ShnqAdminEditionAPIView(AdminAPIView):
             edition.source_file = upload
             edition.save(update_fields=["source_file", "updated_at"])
             try:
-                process_edition(edition)
+                raw = process_edition(edition)
             except ValueError as exc:
                 edition.source_file.delete(save=False)
                 edition.source_file.name = old_file
                 edition.save(update_fields=["source_file", "updated_at"])
                 return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+            edition.lang = resolve_lang(edition.lang, raw)
+            edition.save(update_fields=["lang", "updated_at"])
             if old_file and old_file != edition.source_file.name:
                 edition.source_file.storage.delete(old_file)
 
@@ -379,12 +400,17 @@ class ShnqAdminEditionAPIView(AdminAPIView):
 class ShnqAdminEditionReparseAPIView(AdminAPIView):
     def post(self, request, pk):
         edition = get_object_or_404(ShnkEdition, pk=pk)
+        old_lang = edition.lang
         try:
-            process_edition(edition)
+            raw = process_edition(edition)
         except ValueError as exc:
             edition.parse_error = str(exc)
             edition.save(update_fields=["parse_error", "updated_at"])
             return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        edition.lang = resolve_lang(edition.lang, raw)
+        edition.save(update_fields=["lang", "updated_at"])
         rebuild_chain(edition.shnk_id, edition.lang)
+        if old_lang != edition.lang:
+            rebuild_chain(edition.shnk_id, old_lang)
         edition.refresh_from_db()
         return Response(_edition_brief(edition))

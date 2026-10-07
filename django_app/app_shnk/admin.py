@@ -1,6 +1,6 @@
 from django.contrib import admin, messages
 from .models import Subsystem, ShnkGroup, Shnk, Qurilish_reglaament, Malumotnoma, SREN, SREN_SHNQ, Texnik_reglaament, Standard, ShnkGroupInformation, ShnkInformation, ShnkEdition
-from .shnq_docs import process_edition, rebuild_chain
+from .shnq_docs import process_edition, rebuild_chain, resolve_lang
 from modeltranslation.admin import TranslationAdmin, TabbedTranslationAdmin
 from import_export.admin import  ImportExportModelAdmin
 
@@ -160,7 +160,9 @@ class ShnkEditionAdmin(admin.ModelAdmin):
         super().save_model(request, obj, form, change)
         if not change or "source_file" in form.changed_data:
             try:
-                process_edition(obj)
+                raw = process_edition(obj)
+                obj.lang = resolve_lang(obj.lang, raw)
+                obj.save(update_fields=["lang"])
             except ValueError as exc:
                 obj.parse_error = str(exc)
                 obj.save(update_fields=["parse_error"])

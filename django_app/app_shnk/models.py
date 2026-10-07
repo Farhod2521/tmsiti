@@ -88,7 +88,7 @@ class ShnkEdition(models.Model):
     Admin .docx yuklaydi -> matn bloklarga ajratiladi -> oldingi tahrir bilan
     solishtirilib, o'zgargan bandlarga "Oldingi tahrirga qarang" qo'shiladi.
     """
-    LANG_CHOICES = (("uz", "O'zbekcha"), ("ru", "Русский"))
+    LANG_CHOICES = (("uz", "O'zbekcha (lotin)"), ("kr", "Ўзбекча (кирилл)"), ("ru", "Русский"))
 
     shnk = models.ForeignKey(Shnk, on_delete=models.CASCADE, related_name="editions", verbose_name="SHNQ")
     lang = models.CharField(max_length=2, choices=LANG_CHOICES, default="uz", verbose_name="Til")

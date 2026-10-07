@@ -69,6 +69,40 @@ CHAPTER_RE = re.compile(
 HEADING_STYLE_RE = re.compile(r"^(heading|заголовок)\s*(\d)")
 
 
+LANG_CODES = ("uz", "kr", "ru")
+_LATIN_RE = re.compile(r"[a-z]")
+_CYR_RE = re.compile(r"[а-яёўқғҳ]")
+_UZ_CYR_RE = re.compile(r"[ўқғҳ]")
+_RU_ONLY_RE = re.compile(r"[ыщ]")
+
+
+def detect_lang(blocks):
+    """
+    Matn tilini aniqlaydi: "uz" (o'zbek lotin), "kr" (o'zbek kirill) yoki "ru".
+    Kirillda o'zbekcha uchun ў/қ/ғ/ҳ, ruscha uchun ы/щ harflari hal qiladi.
+    """
+    text = " ".join(b.get("key", "") for b in blocks)[:300000]
+    latin = len(_LATIN_RE.findall(text))
+    cyr = len(_CYR_RE.findall(text))
+    if latin > cyr:
+        return "uz"
+    return "kr" if len(_UZ_CYR_RE.findall(text)) > len(_RU_ONLY_RE.findall(text)) else "ru"
+
+
+def resolve_lang(chosen, raw_blocks):
+    """
+    Admin tanlagan til bilan matndan aniqlangan tilni solishtiradi.
+    "auto" yoki noma'lum bo'lsa — aniqlangani. O'zbekcha tanlanib, yozuvi (lotin/kirill)
+    noto'g'ri bo'lsa ham aniqlangani olinadi; ruscha/o'zbekcha tanlovi esa hurmat qilinadi.
+    """
+    detected = detect_lang(raw_blocks)
+    if chosen not in LANG_CODES:
+        return detected
+    if chosen in ("uz", "kr") and detected in ("uz", "kr"):
+        return detected
+    return chosen
+
+
 def normalize(text):
     return re.sub(r"\s+", " ", (text or "").translate(_APOS)).strip().lower()
 
