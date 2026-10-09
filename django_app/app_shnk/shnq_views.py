@@ -21,19 +21,24 @@ import datetime
 import hashlib
 import hmac
 import os
+import shutil
+import subprocess
+import sys
 
 from django.conf import settings
 from django.core import signing
 from django.core.cache import cache
 from django.db.models import Count, F, Max, Q, Sum
 from django.shortcuts import get_object_or_404
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.permissions import AllowAny, BasePermission
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from .models import Shnk, ShnkCounter, ShnkEdition
+from .lex_sync import invalidate_link_map, make_link_rewriter, rewrite_block
+from .models import LawDocument, LawEdition, LexSource, LexSyncJob, Shnk, ShnkCounter, ShnkEdition
 from .shnq_docs import ALLOWED_EXTENSIONS, LANG_CODES, process_edition, rebuild_chain, resolve_lang
 
 TOKEN_SALT = "shnq-admin"
@@ -117,16 +122,63 @@ def _edition_brief(edition):
         "file": _file_name(edition.source_file),
         "stats": edition.stats or {},
         "error": edition.parse_error or None,
+        "source": edition.source,
         "created_at": edition.created_at.isoformat() if edition.created_at else None,
     }
 
 
-def _editions_light(shnk):
+def _editions_light(owner, model=ShnkEdition):
     return list(
-        ShnkEdition.objects.filter(shnk=shnk)
+        model.objects.filter(**{model.OWNER_FIELD: owner.pk})
         .defer("raw_blocks", "blocks", "toc")
         .order_by("lang", "edition_date", "id")
     )
+
+
+def _lex_ids(owner, field):
+    source = LexSource.objects.filter(**{field: owner}).only("lex_ids").first()
+    return [v for v in (source.lex_ids or {}).values()] if source else []
+
+
+def document_content(request, owner, model, self_lex_ids):
+    """
+    Hujjat tahrirlari va tanlangan tahrir matni (SHNQ va qonunlar uchun umumiy).
+    ?lang=uz|kr|ru  ?prefer=ru,kr,uz  ?edition=<id>
+    """
+    lang = request.GET.get("lang")
+    if lang not in LANG_CODES:
+        lang = None
+    prefer = [l for l in (request.GET.get("prefer") or "").split(",") if l in LANG_CODES]
+    prefer += [l for l in LANG_CODES if l not in prefer]
+
+    editions = [e for e in _editions_light(owner, model) if not e.parse_error and (e.stats or {}).get("blocks")]
+    chosen = None
+    edition_id = request.GET.get("edition")
+    if edition_id and edition_id.isdigit():
+        chosen = next((e for e in editions if e.id == int(edition_id)), None)
+    if chosen is None:
+        available = {e.lang for e in editions}
+        target = lang if lang in available else next((l for l in prefer if l in available), None)
+        pool = [e for e in editions if e.lang == target]
+        chosen = pool[-1] if pool else None
+
+    content = None
+    if chosen is not None:
+        full = model.objects.only("blocks", "toc").get(pk=chosen.id)
+        latest_in_lang = [e for e in editions if e.lang == chosen.lang][-1]
+        # lex.uz havolalari: bizda bor hujjat bo'lsa — sayt ichida, bo'lmasa — lex.uz
+        rewrite = make_link_rewriter(self_lex_ids, chosen.lang)
+        content = {
+            "edition": _edition_brief(chosen),
+            "is_latest": latest_in_lang.id == chosen.id,
+            "blocks": [rewrite_block({k: v for k, v in b.items() if k != "key"}, rewrite) for b in full.blocks],
+            "toc": full.toc,
+        }
+    return {
+        "languages": [l for l in LANG_CODES if any(e.lang == l for e in editions)],
+        "editions": [_edition_brief(e) for e in editions],
+        "content": content,
+    }
 
 
 # =====================================================================
@@ -135,33 +187,6 @@ def _editions_light(shnk):
 class ShnqDocumentAPIView(PublicAPIView):
     def get(self, request, pk):
         shnk = get_object_or_404(Shnk.objects.select_related("shnkgroup__subsystem"), pk=pk)
-        lang = request.GET.get("lang")
-        if lang not in LANG_CODES:
-            lang = None
-        prefer = [l for l in (request.GET.get("prefer") or "").split(",") if l in LANG_CODES]
-        prefer += [l for l in LANG_CODES if l not in prefer]
-
-        editions = [e for e in _editions_light(shnk) if not e.parse_error and (e.stats or {}).get("blocks")]
-        chosen = None
-        edition_id = request.GET.get("edition")
-        if edition_id and edition_id.isdigit():
-            chosen = next((e for e in editions if e.id == int(edition_id)), None)
-        if chosen is None:
-            available = {e.lang for e in editions}
-            target = lang if lang in available else next((l for l in prefer if l in available), None)
-            pool = [e for e in editions if e.lang == target]
-            chosen = pool[-1] if pool else None
-
-        content = None
-        if chosen is not None:
-            full = ShnkEdition.objects.only("blocks", "toc").get(pk=chosen.id)
-            latest_in_lang = [e for e in editions if e.lang == chosen.lang][-1]
-            content = {
-                "edition": _edition_brief(chosen),
-                "is_latest": latest_in_lang.id == chosen.id,
-                "blocks": [{k: v for k, v in b.items() if k != "key"} for b in full.blocks],
-                "toc": full.toc,
-            }
 
         counter, _ = ShnkCounter.objects.get_or_create(shnk=shnk)
         ShnkCounter.objects.filter(pk=counter.pk).update(views=F("views") + 1)
@@ -175,13 +200,56 @@ class ShnqDocumentAPIView(PublicAPIView):
 
         data = _shnk_brief(shnk)
         data.update({
+            "kind": "shnq",
+            "titles": {"uz": shnk.name_uz, "kr": shnk.name_uz, "ru": shnk.name_ru},
             "views": counter.views + 1,
             "downloads": counter.downloads,
-            "languages": [l for l in LANG_CODES if any(e.lang == l for e in editions)],
-            "editions": [_edition_brief(e) for e in editions],
-            "content": content,
             "related": related,
         })
+        data.update(document_content(request, shnk, ShnkEdition, _lex_ids(shnk, "shnk")))
+        return Response(data)
+
+
+def _law_brief(law):
+    return {
+        "id": law.id,
+        "titles": {"uz": law.title_uz, "kr": law.title_kr, "ru": law.title_ru},
+        "number": law.number,
+        "doc_date": law.doc_date.isoformat() if law.doc_date else None,
+        "status": law.status,
+    }
+
+
+class LawListAPIView(PublicAPIView):
+    def get(self, request):
+        qs = LawDocument.objects.filter(editions__isnull=False).distinct()
+        search = request.GET.get("search", "").strip()
+        if search:
+            qs = qs.filter(
+                Q(title_uz__icontains=search) | Q(title_kr__icontains=search)
+                | Q(title_ru__icontains=search) | Q(number__icontains=search)
+            )
+        laws = list(qs.order_by("-doc_date", "id")[:500])
+        langs = {}
+        for law_id, lang in LawEdition.objects.filter(law_id__in=[l.id for l in laws]).values_list("law_id", "lang").distinct():
+            langs.setdefault(law_id, set()).add(lang)
+        return Response({
+            "count": len(laws),
+            "results": [dict(_law_brief(l), languages=[x for x in LANG_CODES if x in langs.get(l.id, ())]) for l in laws],
+        })
+
+
+class LawDocumentAPIView(PublicAPIView):
+    def get(self, request, pk):
+        law = get_object_or_404(LawDocument, pk=pk)
+        lex_ids = _lex_ids(law, "law")
+        data = _law_brief(law)
+        data.update({
+            "kind": "law",
+            "designation": law.number,
+            "url": f"https://lex.uz/docs/{lex_ids[0]}" if lex_ids else None,
+        })
+        data.update(document_content(request, law, LawEdition, lex_ids))
         return Response(data)
 
 
@@ -281,6 +349,11 @@ class ShnqAdminDocumentDetailAPIView(AdminAPIView):
         shnk = get_object_or_404(Shnk.objects.select_related("shnkgroup__subsystem"), pk=pk)
         data = _shnk_brief(shnk)
         data["editions"] = [_edition_brief(e) for e in _editions_light(shnk)]
+        source = LexSource.objects.filter(shnk=shnk).first()
+        data["lex"] = {
+            "status": source.status, "status_label": source.get_status_display(), "message": source.message,
+            "lex_ids": source.lex_ids, "synced_at": source.synced_at.isoformat() if source.synced_at else None,
+        } if source else None
         return Response(data)
 
 
@@ -414,3 +487,135 @@ class ShnqAdminEditionReparseAPIView(AdminAPIView):
             rebuild_chain(edition.shnk_id, old_lang)
         edition.refresh_from_db()
         return Response(_edition_brief(edition))
+
+
+# =====================================================================
+#   lex.uz AVTOMATIK IMPORT
+#   GET  /api/shnq-admin/lex-sync/          oxirgi jarayon, holatlar, muammoli hujjatlar
+#   POST /api/shnq-admin/lex-sync/start/    {"scope": "all|missing|failed", "mode": "update|replace",
+#                                            "laws": true, "shnk_ids": [12]}
+#   POST /api/shnq-admin/lex-sync/stop/
+# =====================================================================
+STALE_JOB_SECONDS = 5 * 60
+
+
+def _job_dict(job):
+    if job is None:
+        return None
+    return {
+        "id": job.id,
+        "status": job.status,
+        "status_label": job.get_status_display(),
+        "params": job.params,
+        "total": job.total,
+        "done": job.done,
+        "counters": job.counters or {},
+        "current": job.current,
+        "log": (job.log or "").splitlines()[-200:],
+        "stop_requested": job.stop_requested,
+        "created_at": job.created_at.isoformat() if job.created_at else None,
+        "started_at": job.started_at.isoformat() if job.started_at else None,
+        "finished_at": job.finished_at.isoformat() if job.finished_at else None,
+    }
+
+
+def _active_job():
+    """Ishlab turgan jarayon; uzoq vaqt javob bermagan bo'lsa — to'xtab qolgan deb belgilanadi."""
+    job = LexSyncJob.objects.filter(status__in=["queued", "running"]).order_by("-id").first()
+    if job is None:
+        return None
+    last = job.heartbeat or job.created_at
+    if (timezone.now() - last).total_seconds() > STALE_JOB_SECONDS:
+        job.status, job.finished_at = "failed", timezone.now()
+        job.log = (job.log + "\n" if job.log else "") + "Jarayon javob bermay qoldi (server qayta ishga tushgan bo'lishi mumkin)."
+        job.save(update_fields=["status", "finished_at", "log"])
+        return None
+    return job
+
+
+def _spawn_job(job):
+    """lex_sync buyrug'ini web-serverdan mustaqil alohida jarayonda ishga tushiradi."""
+    python = getattr(settings, "LEX_SYNC_PYTHON", "") or sys.executable
+    if "python" not in os.path.basename(python).lower():  # uwsgi va h.k. ostida
+        python = shutil.which("python3") or shutil.which("python") or "python3"
+    base_dir = str(settings.BASE_DIR)
+    kwargs = {}
+    if os.name == "nt":
+        kwargs["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.DETACHED_PROCESS
+    else:
+        kwargs["start_new_session"] = True
+    with open(os.path.join(base_dir, "lex_sync.log"), "ab") as out:
+        subprocess.Popen(
+            [python, os.path.join(base_dir, "manage.py"), "lex_sync", "--job", str(job.pk)],
+            cwd=base_dir, stdout=out, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL,
+            env=os.environ.copy(), **kwargs,
+        )
+
+
+class LexSyncStatusAPIView(AdminAPIView):
+    def get(self, request):
+        _active_job()
+        job = LexSyncJob.objects.order_by("-id").first()
+        counts = dict(
+            LexSource.objects.filter(shnk__isnull=False).values_list("status").annotate(n=Count("id")).order_by()
+        )
+        problems = (
+            LexSource.objects.filter(shnk__isnull=False, status__in=["mismatch", "error", "stub"])
+            .select_related("shnk").order_by("status", "shnk__designation")[:300]
+        )
+        with_link = sum(
+            1 for url in Shnk.objects.exclude(url__isnull=True).exclude(url="").values_list("url", flat=True)
+            if "lex.uz" in url and "/docs/" in url
+        )
+        return Response({
+            "job": _job_dict(job),
+            "running": bool(job and job.status in ("queued", "running")),
+            "summary": {
+                "with_lex_link": with_link,
+                "statuses": counts,
+                "laws": LawDocument.objects.filter(editions__isnull=False).distinct().count(),
+            },
+            "problems": [
+                {
+                    "shnk_id": p.shnk_id,
+                    "designation": p.shnk.designation,
+                    "name": p.shnk.name_uz,
+                    "url": p.shnk.url,
+                    "status": p.status,
+                    "status_label": p.get_status_display(),
+                    "message": p.message,
+                    "synced_at": p.synced_at.isoformat() if p.synced_at else None,
+                }
+                for p in problems
+            ],
+        })
+
+
+class LexSyncStartAPIView(AdminAPIView):
+    parser_classes = [JSONParser]
+
+    def post(self, request):
+        if _active_job():
+            return Response({"detail": "Import allaqachon ishlab turibdi"}, status=status.HTTP_409_CONFLICT)
+        shnk_ids = [int(i) for i in (request.data.get("shnk_ids") or []) if str(i).isdigit()]
+        params = {
+            "scope": request.data.get("scope") if request.data.get("scope") in ("all", "missing", "failed") else "all",
+            "mode": "replace" if request.data.get("mode") == "replace" else "update",
+            "laws": bool(request.data.get("laws", True)),
+            "shnk_ids": shnk_ids,
+            "source": "admin",
+        }
+        job = LexSyncJob.objects.create(params=params, heartbeat=timezone.now())
+        try:
+            _spawn_job(job)
+        except Exception as exc:
+            job.status, job.log = "failed", f"Jarayonni ishga tushirib bo'lmadi: {exc}"
+            job.save(update_fields=["status", "log"])
+            return Response({"detail": job.log}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        return Response(_job_dict(job), status=status.HTTP_201_CREATED)
+
+
+class LexSyncStopAPIView(AdminAPIView):
+    def post(self, request):
+        updated = LexSyncJob.objects.filter(status__in=["queued", "running"]).update(stop_requested=True)
+        return Response({"ok": bool(updated)})

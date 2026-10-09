@@ -586,10 +586,10 @@ class LexHtmlParser:
             if not isinstance(div.tag, str) or div.tag.lower() != "div":
                 continue
             cls = (div.get("class") or "").strip().split(" ")[0].upper()
-            # Asosiy matn <a id="..."> ichida bo'ladi
+            # Asosiy matn <a id="..."> (eski eksport) yoki <div id="..."> (yangi eksport) ichida bo'ladi
             anchor_el = None
             for ch in div:
-                if isinstance(ch.tag, str) and ch.tag.lower() == "a" and ch.get("id"):
+                if isinstance(ch.tag, str) and ch.tag.lower() in ("a", "div") and ch.get("id"):
                     anchor_el = ch
                     break
             body = self._render_children(anchor_el) if anchor_el is not None else self._render_children(div)
@@ -626,7 +626,11 @@ class LexHtmlParser:
 
 def _sniff(path):
     with open(path, "rb") as f:
-        head = f.read(2048)
+        return _sniff_bytes(f.read(2048))
+
+
+def _sniff_bytes(data):
+    head = data[:2048]
     if head.startswith(b"PK"):
         return "docx"
     if head.startswith(b"\xd0\xcf\x11\xe0"):
@@ -817,11 +821,19 @@ def diff_blocks(prev, raw, edition):
     return out, counts
 
 
-def rebuild_chain(shnk_id, lang):
-    """SHNQ ning bitta tildagi barcha tahrirlarini qaytadan solishtirib chiqadi."""
-    from .models import ShnkEdition
+def content_hash(raw_blocks):
+    return hashlib.sha1("\n".join(b.get("key", "") for b in raw_blocks).encode("utf-8")).hexdigest()
 
-    editions = ShnkEdition.objects.filter(shnk_id=shnk_id, lang=lang).order_by("edition_date", "id")
+
+def rebuild_chain(owner_id, lang, model=None):
+    """
+    Hujjatning bitta tildagi barcha tahrirlarini qaytadan solishtirib chiqadi.
+    model — ShnkEdition (standart) yoki LawEdition; owner_id — shnk_id / law_id.
+    """
+    if model is None:
+        from .models import ShnkEdition as model
+
+    editions = model.objects.filter(**{model.OWNER_FIELD: owner_id}, lang=lang).order_by("edition_date", "id")
     prev = None
     for edition in editions:
         raw = edition.raw_blocks or []
@@ -857,7 +869,7 @@ def process_edition(edition):
     from django.core.files.base import ContentFile
     from django.core.files.storage import default_storage
 
-    folder = f"FILES/shnq_editions/{edition.shnk_id}/img"
+    folder = f"FILES/shnq_editions/{edition.media_folder()}/img"
 
     def save_image(blob, ext, digest):
         name = f"{folder}/{digest}.{ext}"
@@ -875,6 +887,7 @@ def process_edition(edition):
         raise ValueError("Faylda matn topilmadi")
 
     edition.raw_blocks = raw
+    edition.content_hash = content_hash(raw)
     edition.parse_error = ""
-    edition.save(update_fields=["raw_blocks", "parse_error", "updated_at"])
+    edition.save(update_fields=["raw_blocks", "content_hash", "parse_error", "updated_at"])
     return raw

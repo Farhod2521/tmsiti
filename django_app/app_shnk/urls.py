@@ -21,4 +21,11 @@ urlpatterns = [
     path("shnq-admin/documents/<int:pk>/editions/", shnq_views.ShnqAdminEditionCreateAPIView.as_view()),
     path("shnq-admin/editions/<int:pk>/", shnq_views.ShnqAdminEditionAPIView.as_view()),
     path("shnq-admin/editions/<int:pk>/reparse/", shnq_views.ShnqAdminEditionReparseAPIView.as_view()),
+    path("shnq-admin/lex-sync/", shnq_views.LexSyncStatusAPIView.as_view()),
+    path("shnq-admin/lex-sync/start/", shnq_views.LexSyncStartAPIView.as_view()),
+    path("shnq-admin/lex-sync/stop/", shnq_views.LexSyncStopAPIView.as_view()),
+
+    # Qonunlar bo'limi (lex.uz dan avtomatik yuklangan)
+    path("laws/", shnq_views.LawListAPIView.as_view()),
+    path("laws/<int:pk>/", shnq_views.LawDocumentAPIView.as_view()),
 ]

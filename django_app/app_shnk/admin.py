@@ -1,5 +1,5 @@
 from django.contrib import admin, messages
-from .models import Subsystem, ShnkGroup, Shnk, Qurilish_reglaament, Malumotnoma, SREN, SREN_SHNQ, Texnik_reglaament, Standard, ShnkGroupInformation, ShnkInformation, ShnkEdition
+from .models import Subsystem, ShnkGroup, Shnk, Qurilish_reglaament, Malumotnoma, SREN, SREN_SHNQ, Texnik_reglaament, Standard, ShnkGroupInformation, ShnkInformation, ShnkEdition, LawDocument, LexSource, LexSyncJob
 from .shnq_docs import process_edition, rebuild_chain, resolve_lang
 from modeltranslation.admin import TranslationAdmin, TabbedTranslationAdmin
 from import_export.admin import  ImportExportModelAdmin
@@ -230,3 +230,23 @@ class ShnkInformationAdmin(TranslationAdmin):
             )
         }),
     )
+
+@admin.register(LawDocument)
+class LawDocumentAdmin(admin.ModelAdmin):
+    list_display = ("id", "title_kr", "title_uz", "number", "doc_date", "status")
+    search_fields = ("title_uz", "title_kr", "title_ru", "number")
+    list_filter = ("status",)
+
+
+@admin.register(LexSource)
+class LexSourceAdmin(admin.ModelAdmin):
+    list_display = ("id", "shnk", "law", "status", "lex_ids", "synced_at")
+    list_filter = ("status",)
+    search_fields = ("shnk__designation", "law__title_uz", "law__title_kr", "message")
+    readonly_fields = ("synced_at",)
+
+
+@admin.register(LexSyncJob)
+class LexSyncJobAdmin(admin.ModelAdmin):
+    list_display = ("id", "status", "done", "total", "counters", "created_at", "finished_at")
+    readonly_fields = [f.name for f in LexSyncJob._meta.fields]
