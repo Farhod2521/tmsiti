@@ -37,7 +37,7 @@ from rest_framework.permissions import AllowAny, BasePermission
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from .lex_sync import invalidate_link_map, make_link_rewriter, rewrite_block
+from .lex_sync import active_job, invalidate_link_map, make_link_rewriter, rewrite_block
 from .models import LawDocument, LawEdition, LexSource, LexSyncJob, Shnk, ShnkCounter, ShnkEdition
 from .shnq_docs import ALLOWED_EXTENSIONS, LANG_CODES, process_edition, rebuild_chain, resolve_lang
 
@@ -496,9 +496,6 @@ class ShnqAdminEditionReparseAPIView(AdminAPIView):
 #                                            "laws": true, "shnk_ids": [12]}
 #   POST /api/shnq-admin/lex-sync/stop/
 # =====================================================================
-STALE_JOB_SECONDS = 5 * 60
-
-
 def _job_dict(job):
     if job is None:
         return None
@@ -517,20 +514,6 @@ def _job_dict(job):
         "started_at": job.started_at.isoformat() if job.started_at else None,
         "finished_at": job.finished_at.isoformat() if job.finished_at else None,
     }
-
-
-def _active_job():
-    """Ishlab turgan jarayon; uzoq vaqt javob bermagan bo'lsa — to'xtab qolgan deb belgilanadi."""
-    job = LexSyncJob.objects.filter(status__in=["queued", "running"]).order_by("-id").first()
-    if job is None:
-        return None
-    last = job.heartbeat or job.created_at
-    if (timezone.now() - last).total_seconds() > STALE_JOB_SECONDS:
-        job.status, job.finished_at = "failed", timezone.now()
-        job.log = (job.log + "\n" if job.log else "") + "Jarayon javob bermay qoldi (server qayta ishga tushgan bo'lishi mumkin)."
-        job.save(update_fields=["status", "finished_at", "log"])
-        return None
-    return job
 
 
 def _spawn_job(job):
@@ -554,7 +537,7 @@ def _spawn_job(job):
 
 class LexSyncStatusAPIView(AdminAPIView):
     def get(self, request):
-        _active_job()
+        active_job()
         job = LexSyncJob.objects.order_by("-id").first()
         counts = dict(
             LexSource.objects.filter(shnk__isnull=False).values_list("status").annotate(n=Count("id")).order_by()
@@ -595,7 +578,7 @@ class LexSyncStartAPIView(AdminAPIView):
     parser_classes = [JSONParser]
 
     def post(self, request):
-        if _active_job():
+        if active_job():
             return Response({"detail": "Import allaqachon ishlab turibdi"}, status=status.HTTP_409_CONFLICT)
         shnk_ids = [int(i) for i in (request.data.get("shnk_ids") or []) if str(i).isdigit()]
         params = {

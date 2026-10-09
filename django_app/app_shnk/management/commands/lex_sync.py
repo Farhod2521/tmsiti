@@ -15,7 +15,7 @@ Muntazam yangilash (cron, har kecha 02:00):
 """
 from django.core.management.base import BaseCommand, CommandError
 
-from django_app.app_shnk.lex_sync import run_job
+from django_app.app_shnk.lex_sync import active_job, run_job
 from django_app.app_shnk.models import LexSyncJob
 
 
@@ -37,7 +37,7 @@ class Command(BaseCommand):
                 raise CommandError(f"Jarayon #{opts['job']} topilmadi")
             job_id = opts["job"]
         else:
-            if LexSyncJob.objects.filter(status__in=["queued", "running"]).exists():
+            if active_job():
                 raise CommandError("Boshqa import jarayoni ishlab turibdi")
             job_id = LexSyncJob.objects.create(params={
                 "scope": opts["scope"],

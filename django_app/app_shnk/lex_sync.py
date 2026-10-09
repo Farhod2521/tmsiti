@@ -26,6 +26,7 @@ import urllib.error
 import urllib.request
 from difflib import SequenceMatcher
 
+from django.conf import settings
 from django.core.cache import cache
 from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
@@ -54,6 +55,33 @@ STUB_TEXT_MIN = 300
 # Til varianti eng uzun variantning shuncha qismidan qisqa bo'lsa — to'liq tarjima emas, import qilinmaydi
 SHORT_LANG_RATIO = 0.25
 SHORT_LANG_MAX = 6000
+
+
+STALE_JOB_SECONDS = 5 * 60
+
+
+def local_now():
+    """Mahalliy vaqt — USE_TZ yoqilgan yoki o'chirilganidan qat'i nazar."""
+    return timezone.localtime() if settings.USE_TZ else datetime.datetime.now()
+
+
+def active_job():
+    """
+    Ishlab turgan import jarayoni. Uzoq vaqt javob bermagan (yiqilgan, server qayta ishga tushgan)
+    jarayon "xato bilan tugadi" deb belgilanadi — keyingi jarayonni to'sib turmasligi uchun.
+    """
+    from .models import LexSyncJob
+
+    job = LexSyncJob.objects.filter(status__in=["queued", "running"]).order_by("-id").first()
+    if job is None:
+        return None
+    last = job.heartbeat or job.created_at
+    if (timezone.now() - last).total_seconds() > STALE_JOB_SECONDS:
+        job.status, job.finished_at = "failed", timezone.now()
+        job.log = (job.log + "\n" if job.log else "") + "Jarayon javob bermay qoldi (yiqilgan yoki server qayta ishga tushgan)."
+        job.save(update_fields=["status", "finished_at", "log"])
+        return None
+    return job
 
 
 class LexError(Exception):
@@ -299,7 +327,7 @@ class Importer:
         self.mode = mode
         self.client = client or LexClient()
         self.log = log
-        self.today = timezone.localdate()
+        self.today = local_now().date()
 
     # ---------- bitta til ----------
     def _parse_export(self, blob, folder):
@@ -478,7 +506,7 @@ def run_job(job_id):
     lines = job.log.splitlines() if job.log else []
 
     def log(text):
-        stamp = timezone.localtime().strftime("%H:%M:%S")
+        stamp = local_now().strftime("%H:%M:%S")
         lines.append(f"{stamp} {text}")
         del lines[:-LOG_KEEP_LINES]
 
@@ -493,11 +521,11 @@ def run_job(job_id):
             started_at=job.started_at, finished_at=job.finished_at,
         )
 
-    job.status, job.started_at = "running", timezone.now()
     job.counters = job.counters or {}
-    importer = Importer(job=job, mode=params.get("mode", "update"), client=LexClient(params.get("delay", REQUEST_DELAY)), log=log)
-
     try:
+        job.status, job.started_at = "running", timezone.now()
+        importer = Importer(job=job, mode=params.get("mode", "update"),
+                            client=LexClient(params.get("delay", REQUEST_DELAY)), log=log)
         # ---- 1. SHNQ lar ----
         qs = Shnk.objects.exclude(url__isnull=True).exclude(url="").order_by("id")
         if params.get("shnk_ids"):
