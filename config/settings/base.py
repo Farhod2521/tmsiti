@@ -120,4 +120,8 @@ MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 
 # tmsiti.uz/admin dashboard (SHNQ yuklash) paroli. Serverda .env orqali almashtirish mumkin.
 SHNQ_ADMIN_PASSWORD = os.getenv('SHNQ_ADMIN_PASSWORD', '1212')
+
+# tmsiti.uz/admin faqat shu IP manzillardan ochiladi (vergul bilan; 10.0.0.0/24 kabi tarmoq ham bo'ladi).
+# "*" — cheklovsiz. Boshqa IP lar uchun admin API "404 topilmadi" qaytaradi.
+SHNQ_ADMIN_ALLOWED_IPS = os.getenv('SHNQ_ADMIN_ALLOWED_IPS', '87.192.227.186')
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'

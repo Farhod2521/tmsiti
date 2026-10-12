@@ -15,6 +15,7 @@ urlpatterns = [
     # SHNQ — lex.uz ko'rinishidagi matn va tahrirlar
     path("shnq/<int:pk>/", shnq_views.ShnqDocumentAPIView.as_view()),
     path("shnq/<int:pk>/download/", shnq_views.ShnqDownloadHitAPIView.as_view()),
+    path("shnq-admin/access/", shnq_views.ShnqAdminAccessAPIView.as_view()),
     path("shnq-admin/login/", shnq_views.ShnqAdminLoginAPIView.as_view()),
     path("shnq-admin/documents/", shnq_views.ShnqAdminDocumentListAPIView.as_view()),
     path("shnq-admin/documents/<int:pk>/", shnq_views.ShnqAdminDocumentDetailAPIView.as_view()),

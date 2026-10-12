@@ -20,6 +20,7 @@ Admin (X-Admin-Token sarlavhasi bilan):
 import datetime
 import hashlib
 import hmac
+import ipaddress
 import os
 import shutil
 import subprocess
@@ -32,6 +33,7 @@ from django.db.models import Count, F, Max, Q, Sum
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework import status
+from rest_framework.exceptions import NotFound
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.permissions import AllowAny, BasePermission
 from rest_framework.response import Response
@@ -67,6 +69,58 @@ def _client_ip(request):
     )
 
 
+def _is_proxy(ip):
+    try:
+        addr = ipaddress.ip_address(ip)
+    except ValueError:
+        return True  # unix socket va h.k. — so'rov nginx orqali kelgan
+    return addr.is_loopback or addr.is_private
+
+
+def trusted_client_ip(request):
+    """
+    Admin cheklovi uchun soxtalashtirib bo'lmaydigan IP.
+    X-Forwarded-For ning BIRINCHI qiymatini foydalanuvchi o'zi yozib yuborishi mumkin, shuning uchun
+    nginx qo'shgan OXIRGI qiymat olinadi ($proxy_add_x_forwarded_for). Sarlavhalar faqat so'rov
+    lokal proksidan (nginx) kelgandagina hisobga olinadi.
+    """
+    remote = request.META.get("REMOTE_ADDR", "")
+    if not remote or _is_proxy(remote):
+        chain = [p.strip() for p in request.META.get("HTTP_X_FORWARDED_FOR", "").split(",") if p.strip()]
+        if chain:
+            return chain[-1]
+        real = request.META.get("HTTP_X_REAL_IP", "").strip()
+        if real:
+            return real
+    return remote
+
+
+def admin_ip_allowed(request):
+    rules = [r.strip() for r in str(getattr(settings, "SHNQ_ADMIN_ALLOWED_IPS", "")).split(",") if r.strip()]
+    if not rules or "*" in rules:
+        return True
+    try:
+        ip = ipaddress.ip_address(trusted_client_ip(request))
+    except ValueError:
+        return False
+    for rule in rules:
+        try:
+            if ip in ipaddress.ip_network(rule, strict=False):
+                return True
+        except ValueError:
+            continue
+    return False
+
+
+class AdminIpAllowed(BasePermission):
+    """Ruxsat etilmagan IP — admin panel umuman yo'qdek "404" qaytariladi."""
+
+    def has_permission(self, request, view):
+        if not admin_ip_allowed(request):
+            raise NotFound()
+        return True
+
+
 class HasShnqAdminToken(BasePermission):
     message = "Avtorizatsiya talab qilinadi"
 
@@ -88,7 +142,7 @@ class PublicAPIView(APIView):
 
 class AdminAPIView(APIView):
     authentication_classes = []
-    permission_classes = [HasShnqAdminToken]
+    permission_classes = [AdminIpAllowed, HasShnqAdminToken]
 
 
 def _file_name(field):
@@ -269,7 +323,17 @@ class ShnqDownloadHitAPIView(PublicAPIView):
 # =====================================================================
 #   ADMIN
 # =====================================================================
+class ShnqAdminAccessAPIView(PublicAPIView):
+    """Admin sahifasi ochilganda tekshiriladi: ruxsat etilmagan IP uchun 404."""
+    permission_classes = [AdminIpAllowed]
+
+    def get(self, request):
+        return Response({"ok": True, "ip": trusted_client_ip(request)})
+
+
 class ShnqAdminLoginAPIView(PublicAPIView):
+    permission_classes = [AdminIpAllowed]
+
     def post(self, request):
         key = f"shnq_admin_fail_{_client_ip(request)}"
         fails = cache.get(key, 0)
