@@ -1,6 +1,6 @@
 
 from django.urls import path
-from . import shnq_views
+from . import analytics, shnq_views
 from .views import TexnikReglaamentListAPIView, StandardPdfToImagesAPIView, StandardListAPIView, QuizListAPIView, CustomerCreateAPIView, ShnkGroupWithInformationAPIView, ShnkDataImportAPIView
 
 urlpatterns = [
@@ -24,6 +24,10 @@ urlpatterns = [
     path("shnq-admin/lex-sync/", shnq_views.LexSyncStatusAPIView.as_view()),
     path("shnq-admin/lex-sync/start/", shnq_views.LexSyncStartAPIView.as_view()),
     path("shnq-admin/lex-sync/stop/", shnq_views.LexSyncStopAPIView.as_view()),
+
+    # Sayt statistikasi
+    path("analytics/collect/", analytics.collect),
+    path("shnq-admin/analytics/", analytics.AnalyticsReportAPIView.as_view()),
 
     # Qonunlar bo'limi (lex.uz dan avtomatik yuklangan)
     path("laws/", shnq_views.LawListAPIView.as_view()),

@@ -58,8 +58,13 @@ def _password_fingerprint():
 
 
 def _client_ip(request):
+    # nginx orqasida: X-Forwarded-For yoki X-Real-IP (aks holda hamma so'rov 127.0.0.1 dan keladi)
     forwarded = request.META.get("HTTP_X_FORWARDED_FOR", "")
-    return forwarded.split(",")[0].strip() or request.META.get("REMOTE_ADDR", "")
+    return (
+        forwarded.split(",")[0].strip()
+        or request.META.get("HTTP_X_REAL_IP", "").strip()
+        or request.META.get("REMOTE_ADDR", "")
+    )
 
 
 class HasShnqAdminToken(BasePermission):

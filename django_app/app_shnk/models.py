@@ -476,3 +476,30 @@ class ShnkInformation(models.Model):
         super().save(*args, **kwargs)
     def __str__(self):
         return self.name
+
+class PageView(models.Model):
+    """
+    Sayt statistikasi: bitta sahifa ko'rish. tmsiti.uz frontendidagi tracker yuboradi.
+    IP manzil saqlanmaydi — faqat undan aniqlangan viloyat/mamlakat.
+    """
+    view_id = models.CharField(max_length=36, unique=True)
+    visitor_id = models.CharField(max_length=36, db_index=True)   # brauzerda saqlanadigan tasodifiy ID
+    session_id = models.CharField(max_length=36, db_index=True)   # tashrif (30 daqiqa faolsizlikdan keyin yangilanadi)
+    created_at = models.DateTimeField(db_index=True)
+    path = models.CharField(max_length=300, db_index=True)
+    title = models.CharField(max_length=300, blank=True, default="")
+    is_entry = models.BooleanField(default=False)                 # tashrifning birinchi sahifasi
+    source = models.CharField(max_length=20, default="direct")
+    referrer_host = models.CharField(max_length=200, blank=True, default="")
+    country = models.CharField(max_length=2, blank=True, default="")
+    region = models.CharField(max_length=8, blank=True, default="")  # UZ-TK, UZ-SA ... (ISO 3166-2)
+    device = models.CharField(max_length=10, default="desktop")
+    browser = models.CharField(max_length=20, default="other")
+    os = models.CharField(max_length=20, default="other")
+    duration = models.PositiveIntegerField(default=0)              # sahifada o'tkazilgan vaqt, soniya
+
+    class Meta:
+        db_table = "analytics_pageviews"
+        verbose_name = "Sahifa ko'rish"
+        verbose_name_plural = "Sayt statistikasi"
+        indexes = [models.Index(fields=["created_at", "is_entry"])]

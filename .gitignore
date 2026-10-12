@@ -33,3 +33,5 @@ media/
 *.swp
 *.swo
 .DS_Store
+# Sayt statistikasi: IP -> viloyat bazasi (manage.py geoip_update yuklaydi)
+geoip/
