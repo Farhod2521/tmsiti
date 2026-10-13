@@ -149,6 +149,8 @@ class LawDocument(models.Model):
     title_ru = models.CharField(max_length=1000, blank=True, default="", verbose_name="Nomi (рус)")
     number = models.CharField(max_length=200, blank=True, default="", verbose_name="Raqami")
     doc_date = models.DateField(null=True, blank=True, verbose_name="Qabul qilingan sana")
+    # kodeks | qonun | farmon | pq (Prezident qarori) | hukumat | idoraviy | boshqa — lex_sync.law_kind() aniqlaydi
+    kind = models.CharField(max_length=20, blank=True, default="", verbose_name="Turi")
     status = models.BooleanField(default=True, verbose_name="Amalda")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

@@ -39,7 +39,7 @@ from rest_framework.permissions import AllowAny, BasePermission
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from .lex_sync import active_job, invalidate_link_map, make_link_rewriter, rewrite_block
+from .lex_sync import active_job, invalidate_link_map, law_kind, make_link_rewriter, rewrite_block
 from .models import LawDocument, LawEdition, LexSource, LexSyncJob, Shnk, ShnkCounter, ShnkEdition
 from .shnq_docs import ALLOWED_EXTENSIONS, LANG_CODES, process_edition, rebuild_chain, resolve_lang
 
@@ -275,6 +275,7 @@ def _law_brief(law):
         "titles": {"uz": law.title_uz, "kr": law.title_kr, "ru": law.title_ru},
         "number": law.number,
         "doc_date": law.doc_date.isoformat() if law.doc_date else None,
+        "kind": law.kind or "boshqa",
         "status": law.status,
     }
 
@@ -289,12 +290,41 @@ class LawListAPIView(PublicAPIView):
                 | Q(title_ru__icontains=search) | Q(number__icontains=search)
             )
         laws = list(qs.order_by("-doc_date", "id")[:500])
-        langs = {}
-        for law_id, lang in LawEdition.objects.filter(law_id__in=[l.id for l in laws]).values_list("law_id", "lang").distinct():
+
+        # Avval yuklangan qonunlarning turi bir marta aniqlanib saqlanadi
+        for law in laws:
+            if not law.kind:
+                head = LawEdition.objects.filter(law=law).order_by("-lang", "-edition_date").only("raw_blocks").first()
+                law.kind = law_kind(law.number, law.title_kr or law.title_uz, head.raw_blocks[:6] if head else [])
+                LawDocument.objects.filter(pk=law.pk).update(kind=law.kind)
+
+        langs, files = {}, {}
+        for law_id, lang, file in (
+            LawEdition.objects.filter(law_id__in=[l.id for l in laws])
+            .order_by("edition_date", "id").values_list("law_id", "lang", "source_file")
+        ):
             langs.setdefault(law_id, set()).add(lang)
+            files.setdefault(law_id, {})[lang] = file  # oxirgi tahrirning Word fayli
+        sources = {
+            law_id: ids for law_id, ids in LexSource.objects.filter(law_id__in=[l.id for l in laws]).values_list("law_id", "lex_ids")
+        }
+
+        def lex_url(law_id):
+            ids = sources.get(law_id) or {}
+            first = ids.get("kr") or ids.get("uz") or ids.get("ru")
+            return f"https://lex.uz/docs/{first}" if first else None
+
         return Response({
             "count": len(laws),
-            "results": [dict(_law_brief(l), languages=[x for x in LANG_CODES if x in langs.get(l.id, ())]) for l in laws],
+            "results": [
+                dict(
+                    _law_brief(l),
+                    languages=[x for x in LANG_CODES if x in langs.get(l.id, ())],
+                    files=files.get(l.id, {}),
+                    url=lex_url(l.id),
+                )
+                for l in laws
+            ],
         })
 
 

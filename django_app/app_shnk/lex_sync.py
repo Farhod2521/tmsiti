@@ -190,6 +190,29 @@ def page_info(html, lex_id):
     }
 
 
+def law_kind(number, title, raw_blocks):
+    """
+    Qonun hujjatining turi: raqamidan (ПФ-, ПҚ-, ЎРҚ-), nomidan va matn boshidagi
+    "... Вазирлар Маҳкамасининг қарори" kabi sarlavhalardan aniqlanadi.
+    """
+    num = (number or "").upper().replace("‘", "'").replace("ʻ", "'")
+    head = " ".join(b.get("key", "") for b in (raw_blocks or [])[:6])
+    text = f"{(title or '').lower()} {head}"
+    if re.search(r"кодекс|kodeks", (title or "").lower()):
+        return "kodeks"
+    if re.match(r"^(ПФ|PF|УП)\b|^(ПФ|PF|УП)-", num) or re.search(r"\bфармон|\bfarmon|\bуказ\b", head):
+        return "farmon"
+    if re.match(r"^(ПҚ|PQ|ПП)-", num) or (re.search(r"президент|prezident", head) and re.search(r"қарор|qaror|постановлен", head)):
+        return "pq"
+    if re.match(r"^(ЎРҚ|O'RQ|ЗРУ)-", num) or re.search(r"\bқонуни\b|\bqonuni\b|\bзакон\b", head):
+        return "qonun"
+    if re.search(r"вазирлар маҳкамаси|vazirlar mahkamasi|кабинет(а)? министров", text):
+        return "hukumat"
+    if re.search(r"вазир|vazir|министр|қўмита|qo'mita|комитет|агентлик|agentlik|агентств|инспекция|inspeksiya|раис|rais", head):
+        return "idoraviy"
+    return "boshqa"
+
+
 def designation_core(designation):
     """'ШНҚ 1.01.06-23' -> ('1.01.06', '23')"""
     m = re.search(r"(\d+(?:\.\d+)+)\s*[-‑–]?\s*(\d+)?", designation or "")
@@ -459,6 +482,8 @@ class Importer:
                 owner.title_ru = titles.get("ru", owner.title_ru)[:1000]
                 owner.number = info["number"][:200] or owner.number
                 owner.doc_date = info["doc_date"] or owner.doc_date
+                head_raw = (parsed.get("kr") or next(iter(parsed.values())))[1]
+                owner.kind = law_kind(owner.number, owner.title_kr or owner.title_uz, head_raw)
                 owner.save()
 
             message = "; ".join(results)
