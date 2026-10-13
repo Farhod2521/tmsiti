@@ -107,6 +107,73 @@ def normalize(text):
     return re.sub(r"\s+", " ", (text or "").translate(_APOS)).strip().lower()
 
 
+# ---------------- kirill -> lotin (o'zbek) ----------------
+_CYR2LAT = {
+    "а": "a", "б": "b", "в": "v", "г": "g", "д": "d", "ё": "yo", "ж": "j", "з": "z",
+    "и": "i", "й": "y", "к": "k", "л": "l", "м": "m", "н": "n", "о": "o", "п": "p",
+    "р": "r", "с": "s", "т": "t", "у": "u", "ф": "f", "х": "x", "ч": "ch", "ш": "sh",
+    "щ": "sh", "ъ": "ʼ", "ы": "i", "ь": "", "э": "e", "ю": "yu", "я": "ya",
+    "ў": "oʻ", "қ": "q", "ғ": "gʻ", "ҳ": "h",
+}
+_CYR_VOWELS = set("аеёиоуэюяўы")
+_CYR_WORD_RE = re.compile(r"[а-яёўқғҳ]+", re.IGNORECASE)
+_HTML_TOKEN_RE = re.compile(r"(<[^>]*>|&#?\w+;)")
+
+
+def _latin_word(word):
+    out = []
+    for i, ch in enumerate(word):
+        low = ch.lower()
+        prev = word[i - 1].lower() if i else ""
+        if low == "е":
+            lat = "ye" if not prev or prev in _CYR_VOWELS or prev in "ъь" else "e"
+        elif low == "ц":
+            lat = "ts" if prev and prev in _CYR_VOWELS else "s"
+        else:
+            lat = _CYR2LAT.get(low, ch)
+        if ch != low and lat:
+            # Butun so'z katta harfda bo'lsa (ШНҚ) — "SH", aks holda "Sh"
+            neighbours = word[max(i - 1, 0):i] + word[i + 1:i + 2]
+            whole_upper = any(c.isalpha() and c.isupper() for c in neighbours) and len(word) > 1
+            lat = lat.upper() if whole_upper else lat[0].upper() + lat[1:]
+        out.append(lat)
+    return "".join(out)
+
+
+def to_latin(text):
+    """O'zbekcha kirill matnni lotinga o'giradi (lotin harflar, raqamlar o'zgarmaydi)."""
+    if not text:
+        return text
+    return _CYR_WORD_RE.sub(lambda m: _latin_word(m.group(0)), text)
+
+
+def html_to_latin(markup):
+    """HTML ichidagi faqat matnni o'giradi — teglar, atributlar va &entity; lar tegilmaydi."""
+    if not markup:
+        return markup
+    return "".join(
+        part if _HTML_TOKEN_RE.fullmatch(part) else to_latin(part)
+        for part in _HTML_TOKEN_RE.split(markup)
+    )
+
+
+def blocks_to_latin(blocks):
+    """raw_blocks nusxasini lotinga o'girib qaytaradi (key qayta normallashtiriladi)."""
+    result = []
+    for block in blocks:
+        b = dict(block)
+        if b.get("html"):
+            b["html"] = html_to_latin(b["html"])
+        if b.get("text"):
+            b["text"] = to_latin(b["text"])
+        if b.get("notes"):
+            b["notes"] = [html_to_latin(n) for n in b["notes"]]
+        if b.get("key"):
+            b["key"] = normalize(to_latin(b["key"]))
+        result.append(b)
+    return result
+
+
 def _esc(text):
     return html.escape(text, quote=False)
 
