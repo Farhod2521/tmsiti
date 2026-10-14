@@ -6,6 +6,7 @@ Public:
          lang: uz (lotin) | kr (kirill) | ru.  ?prefer=ru,kr,uz — lang berilmasa,
          ro'yxatdagi birinchi mavjud til ochiladi (sayt tiliga qarab)
     POST /api/shnq/<id>/download/                yuklab olishlar sonini oshirish
+    GET  /api/shnq/search/?q=...                 hujjatlar ichidan qidiruv (mos bandlar bilan)
 
 Admin (X-Admin-Token sarlavhasi bilan):
     POST   /api/shnq-admin/login/                      {"password": "..."} -> {"token": "..."}
@@ -42,6 +43,7 @@ from rest_framework.views import APIView
 from .lex_sync import active_job, invalidate_link_map, law_kind, make_link_rewriter, rewrite_block
 from .models import LawDocument, LawEdition, LexSource, LexSyncJob, Shnk, ShnkCounter, ShnkEdition
 from .shnq_docs import ALLOWED_EXTENSIONS, LANG_CODES, process_edition, rebuild_chain, resolve_lang
+from .shnq_search import MIN_TERM as SEARCH_MIN_TERM, query_terms, search as search_documents
 
 TOKEN_SALT = "shnq-admin"
 TOKEN_MAX_AGE = 60 * 60 * 12  # 12 soat
@@ -340,6 +342,21 @@ class LawDocumentAPIView(PublicAPIView):
         })
         data.update(document_content(request, law, LawEdition, lex_ids))
         return Response(data)
+
+
+class ShnqSearchAPIView(PublicAPIView):
+    """Hujjatlar matni ichidan qidiruv: mos hujjatlar va har biridan 3 tagacha band parchasi."""
+
+    def get(self, request):
+        terms = query_terms(request.GET.get("q", ""))
+        if not any(len(t) >= SEARCH_MIN_TERM for t in terms):
+            return Response({"results": []})
+        key = "shnq-search:" + hashlib.sha1(" ".join(terms).encode()).hexdigest()
+        results = cache.get(key)
+        if results is None:
+            results = search_documents(" ".join(terms))
+            cache.set(key, results, 300)
+        return Response({"results": results})
 
 
 class ShnqDownloadHitAPIView(PublicAPIView):

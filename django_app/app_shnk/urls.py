@@ -13,6 +13,7 @@ urlpatterns = [
     path('shnk-create/groups/', ShnkDataImportAPIView.as_view()),
 
     # SHNQ — lex.uz ko'rinishidagi matn va tahrirlar
+    path("shnq/search/", shnq_views.ShnqSearchAPIView.as_view()),
     path("shnq/<int:pk>/", shnq_views.ShnqDocumentAPIView.as_view()),
     path("shnq/<int:pk>/download/", shnq_views.ShnqDownloadHitAPIView.as_view()),
     path("shnq-admin/access/", shnq_views.ShnqAdminAccessAPIView.as_view()),

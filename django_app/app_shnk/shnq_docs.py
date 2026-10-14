@@ -121,6 +121,11 @@ _HTML_TOKEN_RE = re.compile(r"(<[^>]*>|&#?\w+;)")
 
 
 def _latin_word(word):
+    return "".join(_latin_chars(word))
+
+
+def _latin_chars(word):
+    """Har bir kirill harfning lotincha ko'rinishi (ro'yxat uzunligi = so'z uzunligi)."""
     out = []
     for i, ch in enumerate(word):
         low = ch.lower()
@@ -137,7 +142,7 @@ def _latin_word(word):
             whole_upper = any(c.isalpha() and c.isupper() for c in neighbours) and len(word) > 1
             lat = lat.upper() if whole_upper else lat[0].upper() + lat[1:]
         out.append(lat)
-    return "".join(out)
+    return out
 
 
 def to_latin(text):
@@ -929,6 +934,11 @@ def rebuild_chain(owner_id, lang, model=None):
         edition.stats = dict(counts, blocks=len(blocks), headings=len(toc), original=is_original)
         edition.save(update_fields=["blocks", "toc", "stats", "updated_at"])
         prev = [b for b in blocks if b["t"] != "removed"]
+
+    if model.__name__ == "ShnkEdition":
+        from .shnq_search import safe_index_shnk
+
+        safe_index_shnk(owner_id)
 
 
 def process_edition(edition):

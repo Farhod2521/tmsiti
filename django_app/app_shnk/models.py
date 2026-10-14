@@ -243,6 +243,27 @@ class LexSyncJob(models.Model):
         ordering = ["-id"]
 
 
+class ShnkSearchBlock(models.Model):
+    """
+    SHNQ ichidan qidiruv indeksi: oxirgi tahrirning har bir bandi (yoki PDF sahifasi) — bitta qator.
+    shnq_search.index_shnk() yozadi; search_text ustunida MySQL FULLTEXT indeks bor.
+    """
+    shnk = models.ForeignKey(Shnk, on_delete=models.CASCADE, related_name="search_blocks")
+    lang = models.CharField(max_length=2)
+    block = models.CharField(max_length=20, blank=True, default="")  # hujjat sahifasidagi blok id ("b12")
+    page = models.PositiveIntegerField(null=True, blank=True)  # PDF sahifasi (matn tahriri bo'lmasa)
+    section = models.CharField(max_length=300, blank=True, default="")
+    position = models.PositiveIntegerField(default=0)
+    text = models.TextField()
+    search_text = models.TextField()
+
+    class Meta:
+        db_table = "shnq_search_blocks"
+        verbose_name = "SHNQ qidiruv bandi"
+        verbose_name_plural = "SHNQ qidiruv indeksi"
+        indexes = [models.Index(fields=["shnk", "lang"])]
+
+
 class ShnkCounter(models.Model):
     shnk = models.OneToOneField(Shnk, on_delete=models.CASCADE, related_name="counter")
     views = models.PositiveIntegerField(default=0)
