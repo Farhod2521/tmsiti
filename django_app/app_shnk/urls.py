@@ -1,6 +1,6 @@
 
 from django.urls import path
-from . import analytics, shnq_views
+from . import analytics, shnq_views, support
 from .views import TexnikReglaamentListAPIView, StandardPdfToImagesAPIView, StandardListAPIView, QuizListAPIView, CustomerCreateAPIView, ShnkGroupWithInformationAPIView, ShnkDataImportAPIView
 
 urlpatterns = [
@@ -18,6 +18,7 @@ urlpatterns = [
     path("shnq/<int:pk>/download/", shnq_views.ShnqDownloadHitAPIView.as_view()),
     path("shnq-admin/access/", shnq_views.ShnqAdminAccessAPIView.as_view()),
     path("shnq-admin/login/", shnq_views.ShnqAdminLoginAPIView.as_view()),
+    path("shnq-admin/me/", shnq_views.ShnqAdminMeAPIView.as_view()),
     path("shnq-admin/documents/", shnq_views.ShnqAdminDocumentListAPIView.as_view()),
     path("shnq-admin/documents/<int:pk>/", shnq_views.ShnqAdminDocumentDetailAPIView.as_view()),
     path("shnq-admin/documents/<int:pk>/editions/", shnq_views.ShnqAdminEditionCreateAPIView.as_view()),
@@ -26,6 +27,16 @@ urlpatterns = [
     path("shnq-admin/lex-sync/", shnq_views.LexSyncStatusAPIView.as_view()),
     path("shnq-admin/lex-sync/start/", shnq_views.LexSyncStartAPIView.as_view()),
     path("shnq-admin/lex-sync/stop/", shnq_views.LexSyncStopAPIView.as_view()),
+
+    # Sayt yordamchisi: operator bilan chat va hujjatlarga takliflar
+    path("chat/start/", support.ChatStartAPIView.as_view()),
+    path("chat/<str:token>/messages/", support.ChatMessagesAPIView.as_view()),
+    path("suggestions/", support.SuggestionCreateAPIView.as_view()),
+    path("shnq-admin/chat/rooms/", support.AdminChatRoomsAPIView.as_view()),
+    path("shnq-admin/chat/rooms/<int:pk>/messages/", support.AdminChatMessagesAPIView.as_view()),
+    path("shnq-admin/badges/", support.AdminBadgesAPIView.as_view()),
+    path("shnq-admin/suggestions/", support.AdminSuggestionListAPIView.as_view()),
+    path("shnq-admin/suggestions/<int:pk>/", support.AdminSuggestionAPIView.as_view()),
 
     # Sayt statistikasi
     path("analytics/collect/", analytics.collect),

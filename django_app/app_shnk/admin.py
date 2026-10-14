@@ -1,5 +1,5 @@
 from django.contrib import admin, messages
-from .models import Subsystem, ShnkGroup, Shnk, Qurilish_reglaament, Malumotnoma, SREN, SREN_SHNQ, Texnik_reglaament, Standard, ShnkGroupInformation, ShnkInformation, ShnkEdition, LawDocument, LexSource, LexSyncJob
+from .models import Subsystem, ShnkGroup, Shnk, Qurilish_reglaament, Malumotnoma, SREN, SREN_SHNQ, Texnik_reglaament, Standard, ShnkGroupInformation, ShnkInformation, ShnkEdition, LawDocument, LexSource, LexSyncJob, ChatRoom, ChatMessage, DocSuggestion
 from .shnq_docs import process_edition, rebuild_chain, resolve_lang
 from modeltranslation.admin import TranslationAdmin, TabbedTranslationAdmin
 from import_export.admin import  ImportExportModelAdmin
@@ -250,3 +250,28 @@ class LexSourceAdmin(admin.ModelAdmin):
 class LexSyncJobAdmin(admin.ModelAdmin):
     list_display = ("id", "status", "done", "total", "counters", "created_at", "finished_at")
     readonly_fields = [f.name for f in LexSyncJob._meta.fields]
+
+
+class ChatMessageInline(admin.TabularInline):
+    model = ChatMessage
+    extra = 0
+    fields = ("created_at", "sender", "operator", "text")
+    readonly_fields = ("created_at", "sender", "operator", "text")
+    can_delete = False
+
+
+@admin.register(ChatRoom)
+class ChatRoomAdmin(admin.ModelAdmin):
+    list_display = ("__str__", "region", "city", "last_message", "last_message_at", "unread")
+    search_fields = ("name", "last_message", "city")
+    readonly_fields = ("token", "page", "country", "region", "city", "created_at", "last_message_at")
+    inlines = [ChatMessageInline]
+
+
+@admin.register(DocSuggestion)
+class DocSuggestionAdmin(admin.ModelAdmin):
+    list_display = ("created_at", "type", "doc_title", "full_name", "phone", "region", "city", "status")
+    list_editable = ("status",)
+    list_filter = ("status", "type", "kind", "region")
+    search_fields = ("full_name", "phone", "text", "doc_title")
+    readonly_fields = ("kind", "doc_id", "doc_title", "block", "block_text", "country", "region", "city", "created_at")

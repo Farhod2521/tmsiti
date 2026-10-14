@@ -117,6 +117,24 @@ def locate(ip):
     return country, region if region in UZ_REGIONS else ""
 
 
+def locate_place(ip):
+    """
+    (mamlakat, viloyat ISO kodi, shahar/tuman nomi). Shahar — IP bazasidagi eng yaqin aholi punkti
+    (odatda tuman markazi yoki shahar); IP bo'yicha aniq tumanni kafolatlab bo'lmaydi.
+    """
+    country, region = locate(ip)
+    city = ""
+    reader = _reader()
+    if reader and ip:
+        try:
+            rec = reader.get(ip) or {}
+            names = (rec.get("city") or {}).get("names") or {}
+            city = (names.get("en") or next(iter(names.values()), ""))[:120]
+        except Exception:
+            city = ""
+    return country, region, city
+
+
 # ---------------------------------------------------------------------
 #   User-Agent va manba
 # ---------------------------------------------------------------------

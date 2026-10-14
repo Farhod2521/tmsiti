@@ -9,8 +9,6 @@ ALLOWED_HOSTS = ['*']
 
 load_dotenv()  # <-- BU QATORNI TEKSHIRING!
 
-SHNQ_ADMIN_PASSWORD = os.getenv('SHNQ_ADMIN_PASSWORD', SHNQ_ADMIN_PASSWORD)
-SHNQ_ADMIN_ALLOWED_IPS = os.getenv('SHNQ_ADMIN_ALLOWED_IPS', SHNQ_ADMIN_ALLOWED_IPS)
 
 DATABASES = {
     'default': {
@@ -29,6 +27,14 @@ CACHES = {
     'default': {
         'BACKEND': 'django.core.cache.backends.redis.RedisCache',
         'LOCATION': 'redis://127.0.0.1:6379/1',
+    }
+}
+
+# Chat: gunicorn (REST) va uvicorn (WebSocket) jarayonlari xabarlarni Redis orqali almashadi
+CHANNEL_LAYERS = {
+    'default': {
+        'BACKEND': 'channels_redis.core.RedisChannelLayer',
+        'CONFIG': {'hosts': [os.getenv('CHANNEL_REDIS_URL', 'redis://127.0.0.1:6379/2')]},
     }
 }
 

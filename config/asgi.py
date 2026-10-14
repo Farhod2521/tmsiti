@@ -1,16 +1,28 @@
 """
-ASGI config for config project.
+ASGI: oddiy HTTP (Django) + WebSocket (Channels — sayt yordamchisi chati).
 
-It exposes the ASGI callable as a module-level variable named ``application``.
-
-For more information on this file, see
-https://docs.djangoproject.com/en/5.1/howto/deployment/asgi/
+WebSocket uchun alohida jarayon (gunicorn HTTP ni boshqarishda davom etadi):
+    DJANGO_ENV=production uvicorn config.asgi:application --host 127.0.0.1 --port 8001
+nginx: /ws/ -> 127.0.0.1:8001 (Upgrade sarlavhalari bilan).
 """
-
 import os
 
-from django.core.asgi import get_asgi_application
+env = os.getenv("DJANGO_ENV", "development")
+os.environ.setdefault("DJANGO_SETTINGS_MODULE", f"config.settings.{env}")
 
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings')
+from django.core.asgi import get_asgi_application  # noqa: E402
 
-application = get_asgi_application()
+django_asgi_app = get_asgi_application()
+
+from channels.routing import ProtocolTypeRouter, URLRouter  # noqa: E402
+from django.urls import path  # noqa: E402
+
+from django_app.app_shnk import consumers  # noqa: E402
+
+application = ProtocolTypeRouter({
+    "http": django_asgi_app,
+    "websocket": URLRouter([
+        path("ws/chat/<str:token>/", consumers.VisitorChatConsumer.as_asgi()),
+        path("ws/admin/chat/", consumers.AdminChatConsumer.as_asgi()),
+    ]),
+})

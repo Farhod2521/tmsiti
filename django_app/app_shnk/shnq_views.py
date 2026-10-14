@@ -7,9 +7,11 @@ Public:
          ro'yxatdagi birinchi mavjud til ochiladi (sayt tiliga qarab)
     POST /api/shnq/<id>/download/                yuklab olishlar sonini oshirish
     GET  /api/shnq/search/?q=...                 hujjatlar ichidan qidiruv (mos bandlar bilan)
+         &mode=question&limit=6                  sayt yordamchisi (chat) uchun: savol so'zlari tashlanadi
 
 Admin (X-Admin-Token sarlavhasi bilan):
-    POST   /api/shnq-admin/login/                      {"password": "..."} -> {"token": "..."}
+    POST   /api/shnq-admin/login/                      {"username", "password"} -> {"token", "user"}
+    GET    /api/shnq-admin/me/                         joriy xodim
     GET    /api/shnq-admin/documents/?search=&page=     SHNQ lar ro'yxati
     GET    /api/shnq-admin/documents/<id>/              SHNQ + tahrirlari
     POST   /api/shnq-admin/documents/<id>/editions/     yangi tahrir (multipart: file, lang, edition_date, note)
@@ -52,13 +54,32 @@ LOGIN_LOCK_SECONDS = 15 * 60
 MAX_UPLOAD_SIZE = 50 * 1024 * 1024
 
 
-def _admin_password():
-    return str(getattr(settings, "SHNQ_ADMIN_PASSWORD", "1212"))
+def _user_fingerprint(user):
+    # Parol almashtirilsa, xodim o'chirilsa yoki admin huquqi olinsa — eski tokenlar bekor bo'ladi
+    raw = f"{user.pk}:{user.password}:{user.is_active}:{user.is_staff}"
+    return hashlib.sha256(raw.encode()).hexdigest()[:20]
 
 
-def _password_fingerprint():
-    # Parol o'zgarsa eski tokenlar avtomatik bekor bo'ladi
-    return hashlib.sha256(_admin_password().encode()).hexdigest()[:16]
+def make_admin_token(user):
+    return signing.dumps({"u": user.pk, "f": _user_fingerprint(user)}, salt=TOKEN_SALT)
+
+
+def admin_user_from_token(token):
+    """Token to'g'ri va xodim faol bo'lsa — User, aks holda None. (REST va WebSocket uchun umumiy)"""
+    from django.contrib.auth import get_user_model
+
+    if not token:
+        return None
+    try:
+        data = signing.loads(token, salt=TOKEN_SALT, max_age=TOKEN_MAX_AGE)
+    except signing.BadSignature:
+        return None
+    user = get_user_model().objects.filter(pk=data.get("u")).first()
+    if not user or not user.is_active or not user.is_staff:
+        return None
+    if not hmac.compare_digest(str(data.get("f", "")), _user_fingerprint(user)):
+        return None
+    return user
 
 
 def _client_ip(request):
@@ -97,44 +118,13 @@ def trusted_client_ip(request):
     return remote
 
 
-def admin_ip_allowed(request):
-    rules = [r.strip() for r in str(getattr(settings, "SHNQ_ADMIN_ALLOWED_IPS", "")).split(",") if r.strip()]
-    if not rules or "*" in rules:
-        return True
-    try:
-        ip = ipaddress.ip_address(trusted_client_ip(request))
-    except ValueError:
-        return False
-    for rule in rules:
-        try:
-            if ip in ipaddress.ip_network(rule, strict=False):
-                return True
-        except ValueError:
-            continue
-    return False
-
-
-class AdminIpAllowed(BasePermission):
-    """Ruxsat etilmagan IP — admin panel umuman yo'qdek "404" qaytariladi."""
-
-    def has_permission(self, request, view):
-        if not admin_ip_allowed(request):
-            raise NotFound()
-        return True
-
-
 class HasShnqAdminToken(BasePermission):
     message = "Avtorizatsiya talab qilinadi"
 
     def has_permission(self, request, view):
-        token = request.headers.get("X-Admin-Token", "")
-        if not token:
-            return False
-        try:
-            data = signing.loads(token, salt=TOKEN_SALT, max_age=TOKEN_MAX_AGE)
-        except signing.BadSignature:
-            return False
-        return data.get("p") == _password_fingerprint()
+        user = admin_user_from_token(request.headers.get("X-Admin-Token", ""))
+        request.admin_user = user
+        return user is not None
 
 
 class PublicAPIView(APIView):
@@ -144,7 +134,7 @@ class PublicAPIView(APIView):
 
 class AdminAPIView(APIView):
     authentication_classes = []
-    permission_classes = [AdminIpAllowed, HasShnqAdminToken]
+    permission_classes = [HasShnqAdminToken]
 
 
 def _file_name(field):
@@ -349,12 +339,24 @@ class ShnqSearchAPIView(PublicAPIView):
 
     def get(self, request):
         terms = query_terms(request.GET.get("q", ""))
+        question = request.GET.get("mode") == "question"
+        limit = request.GET.get("limit", "")
+        limit = min(int(limit), 80) if limit.isdigit() and int(limit) > 0 else 80
         if not any(len(t) >= SEARCH_MIN_TERM for t in terms):
             return Response({"results": []})
-        key = "shnq-search:" + hashlib.sha1(" ".join(terms).encode()).hexdigest()
+        key = "shnq-search:%s:%s:%s" % (question, limit, hashlib.sha1(" ".join(terms).encode()).hexdigest())
         results = cache.get(key)
         if results is None:
-            results = search_documents(" ".join(terms))
+            results = search_documents(" ".join(terms), max_docs=limit, any_term=question)
+            # Ro'yxat sahifasidan tashqarida (chat) ham ko'rsatish uchun hujjat nomi va shifri
+            meta = {
+                s["id"]: s
+                for s in Shnk.objects.filter(id__in=[r["id"] for r in results]).values(
+                    "id", "designation", "name_uz", "name_ru"
+                )
+            }
+            for r in results:
+                r.update({k: v for k, v in meta.get(r["id"], {}).items() if k != "id"})
             cache.set(key, results, 300)
         return Response({"results": results})
 
@@ -371,33 +373,53 @@ class ShnqDownloadHitAPIView(PublicAPIView):
 #   ADMIN
 # =====================================================================
 class ShnqAdminAccessAPIView(PublicAPIView):
-    """Admin sahifasi ochilganda tekshiriladi: ruxsat etilmagan IP uchun 404."""
-    permission_classes = [AdminIpAllowed]
+    """Eski frontend uchun: admin sahifasi endi hamma uchun ochiq, kirish — login/parol bilan."""
 
     def get(self, request):
-        return Response({"ok": True, "ip": trusted_client_ip(request)})
+        return Response({"ok": True})
 
 
 class ShnqAdminLoginAPIView(PublicAPIView):
-    permission_classes = [AdminIpAllowed]
+    """
+    Django foydalanuvchisi (is_staff) login/paroli bilan kirish.
+    Bir IP dan 10 ta, bitta login uchun 30 ta xato urinishdan keyin 15 daqiqa bloklanadi.
+    Xodim yaratish: python manage.py shnq_admin_user <login>
+    """
 
     def post(self, request):
-        key = f"shnq_admin_fail_{_client_ip(request)}"
-        fails = cache.get(key, 0)
-        if fails >= LOGIN_MAX_FAILS:
+        from django.contrib.auth import authenticate
+
+        username = str(request.data.get("username", "")).strip()[:150]
+        password = str(request.data.get("password", ""))[:256]
+        ip_key = f"shnq_admin_fail_ip_{trusted_client_ip(request)}"
+        user_key = f"shnq_admin_fail_user_{hashlib.sha1(username.lower().encode()).hexdigest()}"
+        if cache.get(ip_key, 0) >= LOGIN_MAX_FAILS or cache.get(user_key, 0) >= LOGIN_MAX_FAILS * 3:
             return Response(
                 {"detail": "Juda ko'p urinish. 15 daqiqadan keyin qayta urinib ko'ring."},
                 status=status.HTTP_429_TOO_MANY_REQUESTS,
             )
 
-        password = str(request.data.get("password", ""))
-        if not hmac.compare_digest(password.encode(), _admin_password().encode()):
-            cache.set(key, fails + 1, LOGIN_LOCK_SECONDS)
-            return Response({"detail": "Parol noto'g'ri"}, status=status.HTTP_401_UNAUTHORIZED)
+        user = authenticate(request, username=username, password=password) if username and password else None
+        if user is None or not user.is_staff:
+            for key in (ip_key, user_key):
+                cache.set(key, cache.get(key, 0) + 1, LOGIN_LOCK_SECONDS)
+            return Response({"detail": "Login yoki parol noto'g'ri"}, status=status.HTTP_401_UNAUTHORIZED)
 
-        cache.delete(key)
-        token = signing.dumps({"p": _password_fingerprint()}, salt=TOKEN_SALT)
-        return Response({"token": token, "expires_in": TOKEN_MAX_AGE})
+        cache.delete(ip_key)
+        cache.delete(user_key)
+        user.last_login = timezone.now()
+        user.save(update_fields=["last_login"])
+        return Response({
+            "token": make_admin_token(user),
+            "expires_in": TOKEN_MAX_AGE,
+            "user": {"username": user.get_username(), "name": user.get_full_name() or user.get_username()},
+        })
+
+
+class ShnqAdminMeAPIView(AdminAPIView):
+    def get(self, request):
+        user = request.admin_user
+        return Response({"username": user.get_username(), "name": user.get_full_name() or user.get_username()})
 
 
 class ShnqAdminDocumentListAPIView(AdminAPIView):

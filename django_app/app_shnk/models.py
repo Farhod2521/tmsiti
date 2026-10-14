@@ -264,6 +264,79 @@ class ShnkSearchBlock(models.Model):
         indexes = [models.Index(fields=["shnk", "lang"])]
 
 
+class ChatRoom(models.Model):
+    """
+    Saytdagi yordamchi chat: bitta mehmon — bitta xona. Ro'yxatdan o'tish yo'q:
+    mehmon brauzerida faqat maxfiy `token` saqlanadi, shu token bilan o'z yozishmasini ko'radi.
+    """
+    token = models.CharField(max_length=64, unique=True, editable=False)
+    name = models.CharField(max_length=120, blank=True, default="", verbose_name="Ism")
+    page = models.CharField(max_length=500, blank=True, default="", verbose_name="Qaysi sahifadan")
+    country = models.CharField(max_length=2, blank=True, default="")
+    region = models.CharField(max_length=6, blank=True, default="", verbose_name="Viloyat (ISO)")
+    city = models.CharField(max_length=120, blank=True, default="", verbose_name="Shahar/tuman")
+    unread = models.PositiveIntegerField(default=0, verbose_name="O'qilmagan (operator uchun)")
+    last_message = models.CharField(max_length=300, blank=True, default="")
+    last_message_at = models.DateTimeField(null=True, blank=True, db_index=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "chat_rooms"
+        verbose_name = "Chat"
+        verbose_name_plural = "Chatlar"
+        ordering = ["-last_message_at", "-id"]
+
+    def __str__(self):
+        return self.name or f"Mehmon #{self.pk}"
+
+
+class ChatMessage(models.Model):
+    SENDERS = (("visitor", "Mehmon"), ("operator", "Operator"))
+
+    room = models.ForeignKey(ChatRoom, on_delete=models.CASCADE, related_name="messages")
+    sender = models.CharField(max_length=10, choices=SENDERS)
+    operator = models.CharField(max_length=150, blank=True, default="")  # javob bergan xodim (login)
+    text = models.TextField()
+    read = models.BooleanField(default=False)  # qarshi tomon o'qidimi
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        db_table = "chat_messages"
+        verbose_name = "Chat xabari"
+        verbose_name_plural = "Chat xabarlari"
+        ordering = ["id"]
+
+
+class DocSuggestion(models.Model):
+    """Hujjat sahifasidagi band yonidagi ⋮ menyusidan "Hujjatga taklif yuborish"."""
+    TYPES = (("suggestion", "Hujjatga taklif"), ("error", "Texnik xatolik"))
+    STATUSES = (("new", "Yangi"), ("reviewed", "Ko'rib chiqildi"), ("rejected", "Rad etildi"))
+
+    kind = models.CharField(max_length=10, default="shnq")  # shnq | law
+    doc_id = models.PositiveIntegerField()
+    doc_title = models.CharField(max_length=500, blank=True, default="")
+    block = models.CharField(max_length=20, blank=True, default="")  # "b12"
+    block_text = models.TextField(blank=True, default="")
+    type = models.CharField(max_length=12, choices=TYPES, default="suggestion", verbose_name="Turi")
+    full_name = models.CharField(max_length=200, verbose_name="F.I.Sh.")
+    phone = models.CharField(max_length=30, verbose_name="Telefon")
+    text = models.TextField(verbose_name="Taklif matni")
+    country = models.CharField(max_length=2, blank=True, default="")
+    region = models.CharField(max_length=6, blank=True, default="", verbose_name="Viloyat (ISO)")
+    city = models.CharField(max_length=120, blank=True, default="", verbose_name="Shahar/tuman")
+    status = models.CharField(max_length=10, choices=STATUSES, default="new", verbose_name="Holati")
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        db_table = "doc_suggestions"
+        verbose_name = "Taklif"
+        verbose_name_plural = "Takliflar"
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.full_name}: {self.doc_title[:60]}"
+
+
 class ShnkCounter(models.Model):
     shnk = models.OneToOneField(Shnk, on_delete=models.CASCADE, related_name="counter")
     views = models.PositiveIntegerField(default=0)

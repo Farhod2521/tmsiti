@@ -27,6 +27,15 @@ SNIPPET_BEFORE = 70
 SNIPPET_AFTER = 170
 
 _APOSTROPHES = set("'ʻʼ‘’`´")
+
+# Yordamchi (chat) savollaridagi so'roq va xizmat so'zlari — hujjat matnida izlanmaydi
+QUESTION_STOPWORDS = set("""
+qaysi qanday qancha nima nimalar nega qayerda qachon kim bormi bor yoq kerak kerakmi mumkin mumkinmi
+haqida boyicha uchun bilan menga bizga iltimos topib topish toping ber bering beringchi qidir qidiring
+korsat korsating ayting aytib malumot hujjat hujjatlar hujjati shnq shnk qmq norma normalar talab
+salom assalomu alaykum rahmat va yoki ham bu shu ushbu edi ekan qilish qilib
+kakoy kakie kakaya gde est nuzhno pro dlya ili chto kak naydi naydite pokaji dokument dokumenty
+""".split())
 _TAG_RE = re.compile(r"<[^>]+>")
 
 
@@ -220,14 +229,20 @@ def safe_index_shnk(shnk_id):
 
 
 # ---------------- qidiruv ----------------
-def search(query, max_docs=80, hits_per_doc=3, max_rows=3000):
+def search(query, max_docs=80, hits_per_doc=3, max_rows=5000, any_term=False):
     """
     Natija: [{"id", "count", "hits": [{"lang", "block", "page", "section", "snippet"}]}]
     — eng mos hujjat birinchi. Bitta hujjatdan faqat bitta til (lotin/kirill nusxalari takrorlanmasin).
+    any_term=True (chat savollari): so'roq so'zlari tashlanadi, so'zlarning hammasi emas,
+    ko'prog'i mos kelgan bandlar yuqorida.
     """
+    from django.db.models import Q
+
     from .models import ShnkSearchBlock
 
     terms = query_terms(query)
+    if any_term:
+        terms = [t for t in terms if t not in QUESTION_STOPWORDS and len(t) >= MIN_TERM]
     long_terms = [t for t in terms if len(t) >= MIN_TERM]
     if not long_terms:
         return []
@@ -236,22 +251,30 @@ def search(query, max_docs=80, hits_per_doc=3, max_rows=3000):
     if connection.vendor == "mysql":
         table = ShnkSearchBlock._meta.db_table
         match = f"MATCH(`{table}`.`search_text`) AGAINST (%s IN BOOLEAN MODE)"
-        against = " ".join(f"+{t}*" for t in long_terms)
+        against = " ".join(f"{t}*" if any_term else f"+{t}*" for t in long_terms)
         qs = qs.extra(select={"score": match}, select_params=[against], where=[match], params=[against])
         qs = qs.order_by("-score", "position")
     else:  # sqlite (lokal ishlab chiqish)
-        for t in long_terms:
-            qs = qs.filter(search_text__contains=t)
+        if any_term:
+            any_q = Q()
+            for t in long_terms:
+                any_q |= Q(search_text__contains=t)
+            qs = qs.filter(any_q)
+        else:
+            for t in long_terms:
+                qs = qs.filter(search_text__contains=t)
         qs = qs.order_by("shnk_id", "position")
 
-    rows = qs.values("shnk_id", "lang", "block", "page", "section", "text", "search_text")[:max_rows]
-
-    docs = {}
-    for row in rows:
+    # 1-bosqich: faqat qaysi bandlar mos kelishi (to'liq matn o'qilmaydi)
+    short_terms = [t for t in terms if len(t) < MIN_TERM]
+    fields = ["id", "shnk_id", "lang"] + (["search_text"] if short_terms else [])
+    docs, chosen = {}, []
+    for row in qs.values(*fields)[:max_rows]:
         # Qisqa so'zlar (2 harf) FULLTEXT da hisobga olinmaydi — shu yerda tekshiramiz
-        padded = f" {row['search_text']}"
-        if not all(f" {t}" in padded for t in terms):
-            continue
+        if short_terms:
+            padded = f" {row['search_text']}"
+            if not all(f" {t}" in padded for t in short_terms):
+                continue
         if row["shnk_id"] not in docs and len(docs) >= max_docs:
             continue
         doc = docs.setdefault(row["shnk_id"], {"id": row["shnk_id"], "lang": row["lang"], "count": 0, "hits": []})
@@ -259,11 +282,24 @@ def search(query, max_docs=80, hits_per_doc=3, max_rows=3000):
             continue
         doc["count"] += 1
         if len(doc["hits"]) < hits_per_doc:
-            doc["hits"].append({
-                "lang": row["lang"],
-                "block": row["block"] or None,
-                "page": row["page"],
-                "section": row["section"],
-                "snippet": make_snippet(row["text"], terms),
-            })
+            doc["hits"].append(row["id"])
+            chosen.append(row["id"])
+
+    # 2-bosqich: faqat ko'rsatiladigan bandlarning matni va parchasi
+    blocks = {
+        b["id"]: b
+        for b in ShnkSearchBlock.objects.filter(id__in=chosen).values("id", "lang", "block", "page", "section", "text")
+    }
+    for doc in docs.values():
+        doc["hits"] = [
+            {
+                "lang": b["lang"],
+                "block": b["block"] or None,
+                "page": b["page"],
+                "section": b["section"],
+                "snippet": make_snippet(b["text"], terms),
+            }
+            for b in (blocks.get(i) for i in doc["hits"])
+            if b
+        ]
     return [{k: v for k, v in d.items() if k != "lang"} for d in docs.values()]
