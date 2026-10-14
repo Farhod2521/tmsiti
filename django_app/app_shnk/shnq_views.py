@@ -500,7 +500,7 @@ def _validate_file(upload):
         return "Fayl tanlanmagan"
     ext = os.path.splitext(upload.name)[1].lower()
     if ext not in ALLOWED_EXTENSIONS:
-        return "Faqat .doc, .docx yoki .html fayl yuklash mumkin"
+        return "Faqat .doc, .docx, .rtf yoki .html fayl yuklash mumkin"
     if upload.size > MAX_UPLOAD_SIZE:
         return "Fayl hajmi 50 MB dan oshmasligi kerak"
     return None

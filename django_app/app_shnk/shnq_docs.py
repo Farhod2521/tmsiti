@@ -27,7 +27,9 @@ frontend uni MEDIA_URL bilan almashtiradi.
 """
 import hashlib
 import html
+import logging
 import os
+import pathlib
 import re
 import shutil
 import subprocess
@@ -39,7 +41,9 @@ from docx.enum.style import WD_STYLE_TYPE
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.oxml.ns import qn
 
-ALLOWED_EXTENSIONS = (".docx", ".doc", ".htm", ".html")
+logger = logging.getLogger(__name__)
+
+ALLOWED_EXTENSIONS = (".docx", ".doc", ".rtf", ".htm", ".html")
 MEDIA_PLACEHOLDER = "{{MEDIA}}"
 
 M_NS = "{http://schemas.openxmlformats.org/officeDocument/2006/math}"
@@ -707,6 +711,8 @@ def _sniff_bytes(data):
         return "docx"
     if head.startswith(b"\xd0\xcf\x11\xe0"):
         return "word97"
+    if head.lstrip(b"\xef\xbb\xbf \t\r\n").startswith(b"{\\rtf"):
+        return "rtf"  # Word'da "RTF" turida saqlangan .doc
     probe = head.lstrip(b"\xef\xbb\xbf \t\r\n").lower()
     if probe.startswith((b"<html", b"<!doctype", b"<?xml", b"<head", b"<div", b"<meta")) or b"<html" in probe:
         return "html"
@@ -799,31 +805,55 @@ def _find_soffice():
 def parse_document(path, image_saver):
     ext = os.path.splitext(path)[1].lower()
     if ext not in ALLOWED_EXTENSIONS:
-        raise ValueError("Faqat .doc, .docx yoki .html fayl yuklash mumkin")
+        raise ValueError("Faqat .doc, .docx, .rtf yoki .html fayl yuklash mumkin")
     kind = _sniff(path)
     if kind == "html":
         with open(path, "rb") as f:
             return LexHtmlParser(f.read(), image_saver).parse()
     if kind == "docx":
         return DocxParser(path, image_saver).parse()
-    if kind != "word97":
-        raise ValueError("Fayl formati tanilmadi. lex.uz dan yuklangan .doc yoki Word .docx fayl yuklang")
+    if kind not in ("word97", "rtf"):
+        raise ValueError("Fayl formati tanilmadi. lex.uz dan yuklangan .doc yoki Word .doc/.docx fayl yuklang")
 
+    with tempfile.TemporaryDirectory(prefix="shnq-conv-") as tmp:
+        converted = _convert_to_docx(path, kind, tmp)
+        return DocxParser(converted, image_saver).parse()
+
+
+def _convert_to_docx(path, kind, tmp):
+    """
+    Word 97-2003 (.doc) yoki RTF faylni LibreOffice bilan .docx ga o'giradi, natija yo'lini qaytaradi.
+    - Fayl nomi kirill/bo'shliqli bo'lishi mumkin ("ШНК 1.01.01-09-LOTINCHA.doc"): supervisor ostida
+      locale yo'q, LibreOffice bunday nomni ocholmay jim qoladi — shuning uchun lotincha nom bilan nusxalanadi.
+    - Har bir o'girish uchun alohida profil va HOME: bir vaqtda bir nechta yuklash bir-biriga xalaqit bermaydi.
+    """
     soffice = _find_soffice()
     if not soffice:
         raise ValueError(
-            ".doc formatini o'qish uchun serverda LibreOffice o'rnatilmagan. "
-            "Faylni Word'da ochib .docx qilib saqlang va qayta yuklang."
+            ".doc formatini o'qish uchun serverda LibreOffice o'rnatilmagan "
+            "(sudo apt install libreoffice-writer). Yoki faylni Word'da ochib .docx qilib saqlang."
         )
-    with tempfile.TemporaryDirectory() as tmp:
-        subprocess.run(
-            [soffice, "--headless", "--convert-to", "docx", "--outdir", tmp, path],
-            check=True, timeout=180, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-        )
-        converted = os.path.join(tmp, os.path.splitext(os.path.basename(path))[0] + ".docx")
-        if not os.path.exists(converted):
-            raise ValueError(".doc faylni .docx ga o'girib bo'lmadi")
-        return DocxParser(converted, image_saver).parse()
+    source = os.path.join(tmp, "source.rtf" if kind == "rtf" else "source.doc")
+    shutil.copyfile(path, source)
+    profile = pathlib.Path(tmp, "profile").resolve().as_uri()
+    env = dict(os.environ, HOME=tmp, LANG="C.UTF-8", LC_ALL="C.UTF-8")
+    cmd = [
+        soffice, f"-env:UserInstallation={profile}", "--headless", "--norestore", "--nolockcheck",
+        "--convert-to", "docx:MS Word 2007 XML", "--outdir", tmp, source,
+    ]
+    converted = os.path.join(tmp, "source.docx")
+    output = ""
+    for _ in range(2):  # birinchi ishga tushishda profil yaratilayotganda ba'zan natija chiqmaydi
+        try:
+            proc = subprocess.run(cmd, env=env, timeout=240, capture_output=True, text=True, errors="replace")
+            output = (proc.stderr or proc.stdout or "").strip()
+        except subprocess.TimeoutExpired:
+            output = "LibreOffice 4 daqiqada javob bermadi"
+        if os.path.exists(converted) and os.path.getsize(converted) > 0:
+            return converted
+    logger.warning("LibreOffice .doc -> .docx o'girmadi (%s): %s", os.path.basename(path), output)
+    detail = output.splitlines()[-1][:200] if output else "LibreOffice natija bermadi"
+    raise ValueError(f".doc faylni .docx ga o'girib bo'lmadi: {detail}. Faylni Word'da ochib .docx qilib saqlab yuklang.")
 
 
 # ---------------- tahrirlarni solishtirish ----------------
