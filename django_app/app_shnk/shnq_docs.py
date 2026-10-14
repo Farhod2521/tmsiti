@@ -238,7 +238,17 @@ class _Out:
         parts = []
         for fmt, piece in merged:
             if fmt:
-                bold, italic, underline, strike, valign = fmt
+                bold, italic, underline, strike, valign = fmt[:5]
+                size, caps, color = (tuple(fmt[5:8]) + (None, False, None))[:3]
+                css = []
+                if size and abs(size - 1) >= 0.05:
+                    css.append(f"font-size:{size:.2f}em")
+                if caps:
+                    css.append("text-transform:uppercase")
+                if color:
+                    css.append(f"color:#{color}")
+                if css:
+                    piece = f'<span style="{";".join(css)}">{piece}</span>'
                 if valign == "superscript":
                     piece = f"<sup>{piece}</sup>"
                 elif valign == "subscript":
@@ -252,51 +262,210 @@ class _Out:
                 if bold:
                     piece = f"<b>{piece}</b>"
             parts.append(piece)
-        return "".join(parts).strip()
+        # Sahifa uzilishidan qolgan bosh/oxirdagi <br> lar kerak emas
+        return re.sub(r"^(\s*<br>)+|(<br>\s*)+$", "", "".join(parts).strip()).strip()
 
     @property
     def text(self):
         return re.sub(r"\s+", " ", "".join(self.plain)).strip()
 
 
+def _val(el, tag, attr="w:val"):
+    """el ichidagi <tag w:val="..."> qiymati (bo'lmasa None)."""
+    if el is None:
+        return None
+    child = el.find(qn(tag))
+    return None if child is None else child.get(qn(attr))
+
+
+_RU_LETTERS = "абвгдежзиклмнопрстуфхцчшщэюя"  # Word "russianLower" ro'yxati (ё, й, ъ, ы, ь siz)
+
+
+def _roman(n):
+    out = ""
+    for value, letters in ((1000, "m"), (900, "cm"), (500, "d"), (400, "cd"), (100, "c"), (90, "xc"),
+                           (50, "l"), (40, "xl"), (10, "x"), (9, "ix"), (5, "v"), (4, "iv"), (1, "i")):
+        while n >= value:
+            out += letters
+            n -= value
+    return out
+
+
+def _num_text(n, fmt):
+    if fmt in ("lowerLetter", "upperLetter"):
+        letter = "abcdefghijklmnopqrstuvwxyz"[(n - 1) % 26] * ((n - 1) // 26 + 1)
+        return letter.upper() if fmt == "upperLetter" else letter
+    if fmt in ("russianLower", "russianUpper"):
+        letter = _RU_LETTERS[(n - 1) % len(_RU_LETTERS)] * ((n - 1) // len(_RU_LETTERS) + 1)
+        return letter.upper() if fmt == "russianUpper" else letter
+    if fmt in ("lowerRoman", "upperRoman"):
+        roman = _roman(n)
+        return roman.upper() if fmt == "upperRoman" else roman
+    if fmt == "decimalZero":
+        return f"{n:02d}"
+    return str(n)
+
+
+class _Numbering:
+    """
+    Word avtomatik raqamlashi (1., 1.1., a), б), I. ...). Bu raqamlar matnda yo'q — numbering.xml
+    dagi qoidalar bo'yicha hisoblanadi. Hisoblagich abstractNum bo'yicha yuritiladi (Word kabi:
+    bir ro'yxatning turli numId lari raqamlashni davom ettiradi), startOverride bo'lsa — alohida.
+    """
+
+    def __init__(self, doc):
+        self.nums = {}
+        self.counters = {}
+        try:
+            root = doc.part.numbering_part.element
+        except Exception:
+            return
+        abstract = {}
+        for an in root.findall(qn("w:abstractNum")):
+            levels = {}
+            for lvl in an.findall(qn("w:lvl")):
+                try:
+                    ilvl = int(lvl.get(qn("w:ilvl"), "0"))
+                    start = int(_val(lvl, "w:start") or 1)
+                except ValueError:
+                    continue
+                text_el = lvl.find(qn("w:lvlText"))
+                levels[ilvl] = {
+                    "fmt": _val(lvl, "w:numFmt") or "decimal",
+                    "text": text_el.get(qn("w:val"), "") if text_el is not None else f"%{ilvl + 1}.",
+                    "start": start,
+                    "suff": _val(lvl, "w:suff") or "tab",
+                    "legal": lvl.find(qn("w:isLgl")) is not None,
+                    "ppr": lvl.find(qn("w:pPr")),
+                }
+            abstract[an.get(qn("w:abstractNumId"))] = levels
+        for num in root.findall(qn("w:num")):
+            aid = _val(num, "w:abstractNumId")
+            levels = {k: dict(v) for k, v in abstract.get(aid, {}).items()}
+            restart = False
+            for ov in num.findall(qn("w:lvlOverride")):
+                start = _val(ov, "w:startOverride")
+                try:
+                    ilvl = int(ov.get(qn("w:ilvl"), "0"))
+                except ValueError:
+                    continue
+                if start is not None and ilvl in levels:
+                    levels[ilvl]["start"] = int(start)
+                    restart = True
+            nid = num.get(qn("w:numId"))
+            self.nums[nid] = {"levels": levels, "key": f"n{nid}" if restart else f"a{aid}"}
+
+    def level(self, num_id, ilvl):
+        num = self.nums.get(num_id)
+        return num["levels"].get(ilvl) if num else None
+
+    def label(self, num_id, ilvl):
+        num = self.nums.get(num_id)
+        if not num or ilvl not in num["levels"]:
+            return ""
+        levels = num["levels"]
+        counters = self.counters.setdefault(num["key"], {})
+        level = levels[ilvl]
+        counters[ilvl] = counters[ilvl] + 1 if ilvl in counters else level["start"]
+        for deeper in [k for k in counters if k > ilvl]:
+            del counters[deeper]
+        if level["fmt"] == "none":
+            return ""
+        if level["fmt"] == "bullet":
+            text = "•"
+        else:
+            def part(m):
+                i = int(m.group(1)) - 1
+                lv = levels.get(i, {"start": 1, "fmt": "decimal"})
+                n = counters.get(i, lv["start"])
+                return _num_text(n, "decimal" if level["legal"] else lv["fmt"])
+
+            text = re.sub(r"%([1-9])", part, level["text"])
+        if not text.strip():
+            return ""
+        return text + {"nothing": "", "space": " "}.get(level["suff"], " ")
+
+
+def _twips(value):
+    try:
+        return int(float(value))
+    except (TypeError, ValueError):
+        return None
+
+
 class DocxParser:
+    """
+    Word (.docx) -> bloklar. Hujjat Word'dagidek ko'rinishi uchun har bir paragrafning
+    tekislanishi, chekinishlari, oraliqlari, avtomatik raqami, shrift o'lchami, qalin/kursiv/
+    bosh harf va rangi olinadi. Har bir xususiyat Word qoidasi bo'yicha qidiriladi:
+    paragrafning o'zi -> raqamlash darajasi -> uslub (basedOn zanjiri) -> hujjat standarti (docDefaults).
+    """
+
     def __init__(self, path, image_saver):
         self.doc = Document(path)
         self.part = self.doc.part
         self.image_saver = image_saver
-        self.styles = {}
-        for style in self.doc.styles:
-            if style.type == WD_STYLE_TYPE.PARAGRAPH:
-                self.styles[style.style_id] = style
-        try:
-            self.default_style = self.doc.styles.default(WD_STYLE_TYPE.PARAGRAPH)
-        except Exception:
-            self.default_style = None
-        self._style_cache = {}
+        styles = self.doc.styles.element
+        self.style_el = {s.get(qn("w:styleId")): s for s in styles.findall(qn("w:style"))}
+        self.default_pstyle = next(
+            (sid for sid, s in self.style_el.items()
+             if s.get(qn("w:type")) == "paragraph" and s.get(qn("w:default")) in ("1", "true", "on")),
+            None,
+        )
+        defaults = styles.find(qn("w:docDefaults"))
+        self.ppr_default = defaults.find(f"{qn('w:pPrDefault')}/{qn('w:pPr')}") if defaults is not None else None
+        self.rpr_default = defaults.find(f"{qn('w:rPrDefault')}/{qn('w:rPr')}") if defaults is not None else None
+        self.numbering = _Numbering(self.doc)
+        self._chains = {}
+        base = self._prop(self._rpr_chain(None, self.default_pstyle), "w:sz")
+        self.base_hp = _twips(base) or 22  # yarim punktlarda; standart 11 pt
+        self.base_pt = self.base_hp / 2
 
-    # ---------- uslublar ----------
-    def _style_info(self, style_id):
-        if style_id in self._style_cache:
-            return self._style_cache[style_id]
-        style = self.styles.get(style_id) if style_id else self.default_style
-        name, bold, align = "", False, None
-        if style is not None:
-            name = (style.name or "").lower()
-            s = style
-            while s is not None:
-                if s.font.bold is not None:
-                    bold = bool(s.font.bold)
-                    break
-                s = s.base_style
-            s = style
-            while s is not None:
-                if s.paragraph_format.alignment is not None:
-                    align = s.paragraph_format.alignment
-                    break
-                s = s.base_style
-        info = (name, bold, align)
-        self._style_cache[style_id] = info
-        return info
+    # ---------- uslublar zanjiri ----------
+    def _chain(self, style_id):
+        if style_id in self._chains:
+            return self._chains[style_id]
+        chain, seen, sid = [], set(), style_id
+        while sid and sid not in seen and sid in self.style_el:
+            seen.add(sid)
+            el = self.style_el[sid]
+            chain.append(el)
+            sid = _val(el, "w:basedOn")
+        self._chains[style_id] = chain
+        return chain
+
+    def _style_name(self, style_id):
+        chain = self._chain(style_id)
+        return ((_val(chain[0], "w:name") or "") if chain else "").lower()
+
+    @staticmethod
+    def _prop(prs, tag, attr="w:val"):
+        """Birinchi aniqlangan qiymat (atribut bo'yicha — Word ham shunday birlashtiradi)."""
+        for pr in prs:
+            if pr is None:
+                continue
+            el = pr.find(qn(tag))
+            if el is not None and el.get(qn(attr)) is not None:
+                return el.get(qn(attr))
+        return None
+
+    @staticmethod
+    def _on(prs, tag):
+        """Yoqilgan/o'chirilgan bayroq (w:b, w:caps ...): True/False, aniqlanmasa None."""
+        for pr in prs:
+            if pr is None:
+                continue
+            el = pr.find(qn(tag))
+            if el is not None:
+                return el.get(qn("w:val")) not in ("0", "false", "off", "none")
+        return None
+
+    def _rpr_chain(self, rpr, pstyle_id, rstyle_id=None):
+        prs = [rpr]
+        prs += [s.find(qn("w:rPr")) for s in self._chain(rstyle_id)] if rstyle_id else []
+        prs += [s.find(qn("w:rPr")) for s in self._chain(pstyle_id)]
+        prs.append(self.rpr_default)
+        return prs
 
     # ---------- rasm ----------
     def _image(self, rid, out):
@@ -318,34 +487,44 @@ class DocxParser:
             self._image(imd.get(R_ID), out)
 
     # ---------- matn ----------
-    def _run(self, r, para_bold, out):
+    def _run_format(self, r, pstyle_id):
         rpr = r.find(qn("w:rPr"))
-        bold = _flag(rpr, "w:b")
-        if bold is None:
-            bold = para_bold
-        valign = None
-        if rpr is not None:
-            va = rpr.find(qn("w:vertAlign"))
-            if va is not None:
-                valign = va.get(qn("w:val"))
-        fmt = (
-            bool(bold),
-            bool(_flag(rpr, "w:i")),
-            bool(_flag(rpr, "w:u")),
-            bool(_flag(rpr, "w:strike") or _flag(rpr, "w:dstrike")),
+        prs = self._rpr_chain(rpr, pstyle_id, _val(rpr, "w:rStyle"))
+        if self._on(prs, "w:vanish"):
+            return None  # yashirin matn
+        valign = self._prop(prs, "w:vertAlign")
+        underline = self._prop(prs, "w:u")
+        size = _twips(self._prop(prs, "w:sz"))
+        color = (self._prop(prs, "w:color") or "").upper()
+        if not re.fullmatch(r"[0-9A-F]{6}", color) or color in ("000000", "FFFFFF"):
+            color = None  # avtomatik / qora — sayt matn rangi; oq — fonda ko'rinmaydi
+        return (
+            bool(self._on(prs, "w:b")),
+            bool(self._on(prs, "w:i")),
+            bool(underline and underline != "none"),
+            bool(self._on(prs, "w:strike") or self._on(prs, "w:dstrike")),
             valign if valign in ("superscript", "subscript") else None,
+            round(size / self.base_hp, 2) if size else None,
+            bool(self._on(prs, "w:caps") or self._on(prs, "w:smallCaps")),
+            color,
         )
+
+    def _run(self, r, pstyle_id, out):
+        fmt = self._run_format(r, pstyle_id)
+        if fmt is None:
+            return
         for ch in r:
             tag = ch.tag
             if tag == qn("w:t"):
                 out.add_text(fmt, ch.text or "")
-            elif tag == qn("w:tab"):
+            elif tag in (qn("w:tab"), qn("w:ptab")):
                 out.add_text(fmt, " ")
             elif tag in (qn("w:br"), qn("w:cr")):
-                if ch.get(qn("w:type")) != "page":
-                    out.add_raw("<br>", " ")
+                out.add_raw("<br>", " ")  # sahifa uzilishi ham: matn yopishib qolmasin
             elif tag == qn("w:noBreakHyphen"):
                 out.add_text(fmt, "-")
+            elif tag == qn("w:softHyphen"):
+                continue
             elif tag == qn("w:sym"):
                 code = ch.get(qn("w:char"))
                 try:
@@ -360,14 +539,14 @@ class DocxParser:
         if text:
             out.add_raw(f'<span class="math">{_esc(text)}</span>', text)
 
-    def _inline(self, el, para_bold, out):
+    def _inline(self, el, pstyle_id, out):
         for ch in el:
             tag = ch.tag
             if tag == qn("w:r"):
-                self._run(ch, para_bold, out)
+                self._run(ch, pstyle_id, out)
             elif tag == qn("w:hyperlink"):
                 sub = _Out()
-                self._inline(ch, para_bold, sub)
+                self._inline(ch, pstyle_id, sub)
                 href = None
                 rid = ch.get(R_ID)
                 if rid and rid in self.part.rels:
@@ -381,49 +560,68 @@ class DocxParser:
             elif tag in (f"{M_NS}oMath", f"{M_NS}oMathPara"):
                 self._math(ch, out)
             elif tag in (
-                qn("w:ins"), qn("w:smartTag"), qn("w:customXml"), qn("w:sdt"),
+                qn("w:ins"), qn("w:moveTo"), qn("w:smartTag"), qn("w:customXml"), qn("w:sdt"),
                 qn("w:sdtContent"), qn("w:fldSimple"),
             ):
-                self._inline(ch, para_bold, out)
+                self._inline(ch, pstyle_id, out)
+
+    def _em(self, twips, low, high):
+        if twips is None:
+            return 0
+        return max(low, min(high, round(twips / 20 / self.base_pt, 2)))
 
     def _paragraph(self, p):
         ppr = p.find(qn("w:pPr"))
-        style_id, jc = None, None
-        if ppr is not None:
-            ps = ppr.find(qn("w:pStyle"))
-            if ps is not None:
-                style_id = ps.get(qn("w:val"))
-            j = ppr.find(qn("w:jc"))
-            if j is not None:
-                jc = j.get(qn("w:val"))
-        style_name, style_bold, style_align = self._style_info(style_id)
+        style_id = _val(ppr, "w:pStyle") or self.default_pstyle
+        style_prs = [s.find(qn("w:pPr")) for s in self._chain(style_id)]
 
-        if jc in ("center",):
-            align = "center"
-        elif jc in ("right", "end"):
-            align = "right"
-        elif jc in ("both", "distribute", "lowKashida", "mediumKashida", "highKashida"):
-            align = "justify"
-        elif jc in ("left", "start"):
-            align = "left"
-        elif style_align == WD_ALIGN_PARAGRAPH.CENTER:
-            align = "center"
-        elif style_align == WD_ALIGN_PARAGRAPH.RIGHT:
-            align = "right"
-        elif style_align in (WD_ALIGN_PARAGRAPH.JUSTIFY, WD_ALIGN_PARAGRAPH.DISTRIBUTE):
-            align = "justify"
-        else:
-            align = "left"
+        # Avtomatik raqam: numPr paragrafning o'zida yoki uslubida (sarlavha uslublari ko'pincha raqamli)
+        num_prs = [pr.find(qn("w:numPr")) if pr is not None else None for pr in [ppr] + style_prs]
+        num_id = self._prop(num_prs, "w:numId")
+        ilvl = _twips(self._prop(num_prs, "w:ilvl")) or 0
+        level = self.numbering.level(num_id, ilvl) if num_id and num_id != "0" else None
+        prs = [ppr] + ([level["ppr"]] if level else []) + style_prs + [self.ppr_default]
+
+        jc = self._prop(prs, "w:jc")
+        align = {
+            "center": "center", "right": "right", "end": "right",
+            "both": "justify", "distribute": "justify", "lowKashida": "justify",
+            "mediumKashida": "justify", "highKashida": "justify",
+        }.get(jc, "left")
+
+        left = _twips(self._prop(prs, "w:ind", "w:left") or self._prop(prs, "w:ind", "w:start"))
+        right = _twips(self._prop(prs, "w:ind", "w:right") or self._prop(prs, "w:ind", "w:end"))
+        hanging = _twips(self._prop(prs, "w:ind", "w:hanging"))
+        first = -hanging if hanging else _twips(self._prop(prs, "w:ind", "w:firstLine"))
+        fmt = {
+            "ml": self._em(left, -5, 25),
+            "mr": self._em(right, -5, 25),
+            "ti": self._em(first, -10, 20),
+            "mt": self._em(_twips(self._prop(prs, "w:spacing", "w:before")), 0, 5),
+            "mb": self._em(_twips(self._prop(prs, "w:spacing", "w:after")), 0, 5),
+        }
+        if self._on(prs, "w:pageBreakBefore"):
+            fmt["pb"] = True
+        has_text = any((t.text or "").strip() for t in p.iter(qn("w:t")))
+        if not has_text and any(br.get(qn("w:type")) == "page" for br in p.iter(qn("w:br"))):
+            fmt["pb"] = True  # faqat sahifa uzilishidan iborat paragraf
 
         out = _Out()
-        self._inline(p, style_bold, out)
+        if level:
+            label = self.numbering.label(num_id, ilvl)
+            if label:
+                first_fmt = self._run_format(p.find(qn("w:r")), style_id) if p.find(qn("w:r")) is not None else None
+                out.add_text(first_fmt or (False,) * 5, label)
+        self._inline(p, style_id, out)
         return {
             "t": "p",
             "html": out.render(),
             "plain": out.text,
             "align": align,
             "bold": (out.bold_chars / out.total_chars) if out.total_chars else 0,
-            "style": style_name,
+            "style": self._style_name(style_id),
+            "fmt": {k: v for k, v in fmt.items() if v},
+            "has_break": ppr is not None and ppr.find(qn("w:sectPr")) is not None,
         }
 
     # ---------- jadval ----------
@@ -492,6 +690,7 @@ class DocxParser:
             "html": f"<table><tbody>{''.join(html_rows)}</tbody></table>",
             "plain": re.sub(r"\s+", " ", " ".join(plain)).strip(),
             "align": "left",
+            "fmt": {},
         }
 
     # ---------- butun hujjat ----------
@@ -507,7 +706,28 @@ class DocxParser:
                     yield from self._body_items(content)
 
     def parse(self):
-        items = [b for b in self._body_items(self.doc.element.body) if b["html"]]
+        """
+        Bo'sh paragraflar (Word'da oraliq uchun bosilgan Enter) alohida blok bo'lmaydi —
+        ularning balandligi keyingi blokning yuqori oralig'iga qo'shiladi; sahifa/bo'lim
+        uzilishi keyingi blokda "pb" belgisi bo'ladi (saytda ingichka chiziq).
+        """
+        items, gap, page_break = [], 0.0, False
+        for b in self._body_items(self.doc.element.body):
+            fmt = b.get("fmt") or {}
+            if not b["html"]:
+                gap += 1.2 + fmt.get("mt", 0) + fmt.get("mb", 0)
+                page_break = page_break or bool(fmt.get("pb")) or b.pop("has_break", False)
+                continue
+            if gap or page_break:
+                fmt = dict(fmt)
+                if gap:
+                    fmt["mt"] = round(min(fmt.get("mt", 0) + gap, 6), 2)
+                if page_break:
+                    fmt["pb"] = True
+                b["fmt"] = fmt
+            page_break = bool(b.pop("has_break", False))
+            gap = 0.0
+            items.append(b)
         return _postprocess(items)
 
 
@@ -833,17 +1053,29 @@ def _convert_to_docx(path, kind, tmp):
             ".doc formatini o'qish uchun serverda LibreOffice o'rnatilmagan "
             "(sudo apt install libreoffice-writer). Yoki faylni Word'da ochib .docx qilib saqlang."
         )
+    if not _writer_installed(soffice):
+        raise ValueError(
+            "Serverda LibreOffice'ning Word qismi o'rnatilmagan, .doc faylni ochib bo'lmaydi. "
+            "Administrator: sudo apt install -y libreoffice-writer"
+        )
     source = os.path.join(tmp, "source.rtf" if kind == "rtf" else "source.doc")
     shutil.copyfile(path, source)
     profile = pathlib.Path(tmp, "profile").resolve().as_uri()
     env = dict(os.environ, HOME=tmp, LANG="C.UTF-8", LC_ALL="C.UTF-8")
-    cmd = [
-        soffice, f"-env:UserInstallation={profile}", "--headless", "--norestore", "--nolockcheck",
-        "--convert-to", "docx:MS Word 2007 XML", "--outdir", tmp, source,
-    ]
     converted = os.path.join(tmp, "source.docx")
-    output = ""
-    for _ in range(2):  # birinchi ishga tushishda profil yaratilayotganda ba'zan natija chiqmaydi
+
+    # Avval avtomatik aniqlash, keyin import filtrini aniq ko'rsatib (eski Word 6.0/95 va
+    # sarlavhasi g'alati .doc fayllar avtomatik tanilmaydi: "source file could not be loaded")
+    if kind == "rtf":
+        filters = [None, "Rich Text Format"]
+    else:
+        filters = [None, None, "MS Word 97", "MS WinWord 6.0", "MS Word 95", "Rich Text Format"]
+    outputs = []
+    for infilter in filters:
+        cmd = [soffice, f"-env:UserInstallation={profile}", "--headless", "--norestore", "--nolockcheck"]
+        if infilter:
+            cmd.append(f"--infilter={infilter}")
+        cmd += ["--convert-to", "docx:MS Word 2007 XML", "--outdir", tmp, source]
         try:
             proc = subprocess.run(cmd, env=env, timeout=240, capture_output=True, text=True, errors="replace")
             output = (proc.stderr or proc.stdout or "").strip()
@@ -851,9 +1083,31 @@ def _convert_to_docx(path, kind, tmp):
             output = "LibreOffice 4 daqiqada javob bermadi"
         if os.path.exists(converted) and os.path.getsize(converted) > 0:
             return converted
-    logger.warning("LibreOffice .doc -> .docx o'girmadi (%s): %s", os.path.basename(path), output)
-    detail = output.splitlines()[-1][:200] if output else "LibreOffice natija bermadi"
-    raise ValueError(f".doc faylni .docx ga o'girib bo'lmadi: {detail}. Faylni Word'da ochib .docx qilib saqlab yuklang.")
+        outputs.append(f"[{infilter or 'auto'}] {output}")
+
+    logger.warning("LibreOffice .doc -> .docx o'girmadi (%s): %s", os.path.basename(path), " | ".join(outputs))
+    last = outputs[-1] if outputs else ""
+    detail = last.splitlines()[-1][:200] if last else "LibreOffice natija bermadi"
+    raise ValueError(
+        f".doc faylni .docx ga o'girib bo'lmadi ({detail}). Fayl shikastlangan yoki parol bilan himoyalangan "
+        "bo'lishi mumkin — uni Word'da ochib, «Saqlash» → .docx qilib yuklang."
+    )
+
+
+def _writer_installed(soffice):
+    """
+    LibreOffice Writer (Word fayllarini ochadigan qism) bormi. Faqat libreoffice-core o'rnatilgan
+    serverda soffice ishlaydi, lekin .doc ni "source file could not be loaded" bilan ocholmaydi.
+    Aniqlab bo'lmasa — True (o'girishga urinib ko'riladi).
+    """
+    program = os.path.dirname(os.path.realpath(soffice))
+    try:
+        names = os.listdir(program)
+    except OSError:
+        return True
+    if not any(n.startswith(("libmergedlo", "libsofficeapp", "mergedlo", "sofficeapp")) for n in names):
+        return True  # LibreOffice papkasi emas (masalan, o'ralgan skript) — tekshirib bo'lmaydi
+    return any(n.startswith(("libswlo", "swlo", "libsw", "sw.dll")) for n in names)
 
 
 # ---------------- tahrirlarni solishtirish ----------------
