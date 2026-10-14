@@ -12,6 +12,7 @@ import html
 import logging
 import os
 import re
+import unicodedata
 
 from django.conf import settings
 from django.db import connection
@@ -103,6 +104,23 @@ def make_snippet(text, terms):
     return ("…" if lo > 0 else "") + "".join(parts).strip() + ("…" if hi < len(text) else "")
 
 
+def _bmp(text):
+    """
+    4 baytli belgilarni (Word formulalaridagi 𝑛, 𝛼 va h.k.) oddiy ko'rinishiga keltiradi
+    (𝑛 -> n), keltirib bo'lmaydiganlarini (emoji) olib tashlaydi: jadval MySQL utf8 (3 bayt) da.
+    """
+    if all(ord(ch) <= 0xFFFF for ch in text):
+        return text
+    out = []
+    for ch in text:
+        if ord(ch) > 0xFFFF:
+            ch = unicodedata.normalize("NFKC", ch)
+            if any(ord(c) > 0xFFFF for c in ch):
+                continue
+        out.append(ch)
+    return "".join(out)
+
+
 def _html_text(markup):
     return re.sub(r"\s+", " ", html.unescape(_TAG_RE.sub(" ", markup or ""))).strip()
 
@@ -182,6 +200,10 @@ def index_shnk(shnk_id):
     if not rows:  # matni yuklanmagan hujjat — PDF dan
         rows = _pdf_rows(shnk)
 
+    for r in rows:
+        r["text"] = _bmp(r["text"])
+        if r.get("section"):
+            r["section"] = _bmp(r["section"])
     ShnkSearchBlock.objects.bulk_create(
         [ShnkSearchBlock(position=i, search_text=search_norm(r["text"]), **r) for i, r in enumerate(rows)],
         batch_size=500,
