@@ -20,6 +20,7 @@ urlpatterns = [
     path("shnq-admin/login/", shnq_views.ShnqAdminLoginAPIView.as_view()),
     path("shnq-admin/me/", shnq_views.ShnqAdminMeAPIView.as_view()),
     path("shnq-admin/documents/", shnq_views.ShnqAdminDocumentListAPIView.as_view()),
+    path("shnq-admin/coverage/", shnq_views.ShnqAdminCoverageAPIView.as_view()),
     path("shnq-admin/documents/<int:pk>/", shnq_views.ShnqAdminDocumentDetailAPIView.as_view()),
     path("shnq-admin/documents/<int:pk>/editions/", shnq_views.ShnqAdminEditionCreateAPIView.as_view()),
     path("shnq-admin/editions/<int:pk>/", shnq_views.ShnqAdminEditionAPIView.as_view()),

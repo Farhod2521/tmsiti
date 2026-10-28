@@ -482,6 +482,83 @@ class ShnqAdminDocumentListAPIView(AdminAPIView):
         })
 
 
+class ShnqAdminCoverageAPIView(AdminAPIView):
+    """
+    Hujjatlar holati: har bir SHNQ saytda qanday ochiladi.
+        text  — matn (lex.uz ko'rinishi): xatosiz, bloklari bor tahrir mavjud
+        pdf   — matn yo'q, PDF ochiladi
+        link  — matn ham, PDF ham yo'q, faqat lex.uz havolasi
+        none  — hech narsa yo'q (hujjat ochilmaydi)
+    "error" — tahriri bor, lekin o'qishda xato (sayt uni ko'rsatmaydi).
+    GET /api/shnq-admin/coverage/?status=active|all
+    """
+
+    def get(self, request):
+        qs = Shnk.objects.select_related("shnkgroup__subsystem").order_by(
+            "shnkgroup__subsystem_id", "shnkgroup_id", "order", "id"
+        )
+        if request.GET.get("status", "active") == "active":
+            qs = qs.filter(status=True)
+        docs = list(qs)
+
+        text_langs, errors = {}, {}
+        for shnk_id, lang, parse_error, stats in ShnkEdition.objects.filter(
+            shnk_id__in=[d.id for d in docs]
+        ).values_list("shnk_id", "lang", "parse_error", "stats"):
+            if parse_error:
+                errors.setdefault(shnk_id, parse_error)
+            elif (stats or {}).get("blocks"):
+                text_langs.setdefault(shnk_id, set()).add(lang)
+
+        summary = {"total": len(docs), "text": 0, "pdf": 0, "link": 0, "none": 0, "error": 0,
+                   "langs": {code: 0 for code in LANG_CODES}}
+        subsystems, items = {}, []
+        for d in docs:
+            langs = text_langs.get(d.id, set())
+            has_pdf = bool(d.pdf_uz or d.pdf_ru)
+            if langs:
+                kind = "text"
+            elif has_pdf:
+                kind = "pdf"
+            elif d.url and "lex.uz" in d.url:
+                kind = "link"
+            else:
+                kind = "none"
+            summary[kind] += 1
+            for code in langs:
+                summary["langs"][code] += 1
+            error = errors.get(d.id) if not langs else None
+            if error:
+                summary["error"] += 1
+
+            group = d.shnkgroup
+            sub = group.subsystem if group else None
+            sub_key = sub.id if sub else 0
+            row = subsystems.setdefault(sub_key, {
+                "id": sub_key, "title": sub.title_uz if sub else "Quyi tizimsiz",
+                "total": 0, "text": 0, "pdf": 0, "link": 0, "none": 0,
+            })
+            row["total"] += 1
+            row[kind] += 1
+
+            if kind != "text":
+                items.append({
+                    "id": d.id,
+                    "designation": d.designation,
+                    "name_uz": d.name_uz,
+                    "name_ru": d.name_ru,
+                    "status": d.status,
+                    "group": group.title_uz if group else None,
+                    "subsystem": sub_key,
+                    "kind": kind,
+                    "pdf_uz": bool(d.pdf_uz),
+                    "pdf_ru": bool(d.pdf_ru),
+                    "url": d.url,
+                    "error": error,
+                })
+        return Response({"summary": summary, "subsystems": list(subsystems.values()), "items": items})
+
+
 class ShnqAdminDocumentDetailAPIView(AdminAPIView):
     def get(self, request, pk):
         shnk = get_object_or_404(Shnk.objects.select_related("shnkgroup__subsystem"), pk=pk)
