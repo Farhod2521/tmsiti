@@ -505,8 +505,8 @@ class  Customer(models.Model):
 
 
     def __str__(self):
-        return self.full_name
-    
+        return self.full_name or self.phone or self.email or f"Customer #{self.pk}"
+
 
 
 
